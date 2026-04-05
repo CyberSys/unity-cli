@@ -266,7 +266,11 @@ namespace UnityCliBridge.Tests
             Assert.IsNotNull(dict);
             Assert.IsFalse(dict.ContainsKey("error"));
             Assert.AreEqual(5.0f, rb.mass);
+#if UNITY_6000_0_OR_NEWER
             Assert.AreEqual(0.5f, rb.linearDamping);
+#else
+            Assert.AreEqual(0.5f, rb.drag);
+#endif
             
             var modifiedPropsToken = dict["modifiedProperties"] as JArray ?? JArray.FromObject(dict["modifiedProperties"]);
             Assert.IsNotNull(modifiedPropsToken);
