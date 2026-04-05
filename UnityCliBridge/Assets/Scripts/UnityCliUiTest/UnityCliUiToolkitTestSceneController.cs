@@ -7,6 +7,8 @@ namespace UnityCliBridge.TestScenes
 {
     public sealed class UnityCliUiToolkitTestSceneController : MonoBehaviour
     {
+        private const int RootReadyFrameBudget = 120;
+
         private int clickCount;
 
         private UITK.UIDocument document;
@@ -19,17 +21,32 @@ namespace UnityCliBridge.TestScenes
         private void Awake()
         {
             document = GetComponent<UITK.UIDocument>();
-            StartCoroutine(BindNextFrame());
+            StartCoroutine(BindWhenReady());
         }
 
-        private IEnumerator BindNextFrame()
+        private IEnumerator BindWhenReady()
         {
-            yield return null;
+            UITK.VisualElement root = null;
+            for (var frame = 0; frame < RootReadyFrameBudget; frame++)
+            {
+                if (document == null)
+                {
+                    yield break;
+                }
 
-            if (document == null) yield break;
+                root = document.rootVisualElement;
+                if (root != null)
+                {
+                    break;
+                }
 
-            var root = document.rootVisualElement;
-            if (root == null) yield break;
+                yield return null;
+            }
+
+            if (root == null)
+            {
+                yield break;
+            }
 
             status = UnityEngine.UIElements.UQueryExtensions.Q<UITK.Label>(root, name: "UITK_Status");
             var button = UnityEngine.UIElements.UQueryExtensions.Q<UITK.Button>(root, name: "UITK_Button");

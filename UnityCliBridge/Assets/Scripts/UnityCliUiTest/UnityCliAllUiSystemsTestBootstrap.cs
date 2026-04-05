@@ -13,6 +13,8 @@ namespace UnityCliBridge.TestScenes
 {
     public sealed class UnityCliAllUiSystemsTestBootstrap : MonoBehaviour
     {
+        private const int UiToolkitReadyFrameBudget = 120;
+
         private int uguiClicks;
         private int uitkClicks;
 
@@ -207,14 +209,28 @@ namespace UnityCliBridge.TestScenes
                 doc.panelSettings = ScriptableObject.CreateInstance<UITK.PanelSettings>();
             }
 
-            StartCoroutine(BuildUiToolkitNextFrame(doc));
+            StartCoroutine(BuildUiToolkitWhenReady(doc));
         }
 
-        private IEnumerator BuildUiToolkitNextFrame(UITK.UIDocument doc)
+        private IEnumerator BuildUiToolkitWhenReady(UITK.UIDocument doc)
         {
-            yield return null;
+            UITK.VisualElement root = null;
+            for (var frame = 0; frame < UiToolkitReadyFrameBudget; frame++)
+            {
+                if (doc == null)
+                {
+                    yield break;
+                }
 
-            var root = doc.rootVisualElement;
+                root = doc.rootVisualElement;
+                if (root != null)
+                {
+                    break;
+                }
+
+                yield return null;
+            }
+
             if (root == null)
             {
                 yield break;

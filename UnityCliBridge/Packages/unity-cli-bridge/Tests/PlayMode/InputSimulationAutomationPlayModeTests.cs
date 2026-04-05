@@ -354,7 +354,8 @@ namespace UnityCliBridge.Tests.PlayMode
 
         private static string GetStatusText()
         {
-            var status = GameObject.Find("/Canvas/InputE2E_Panel/InputE2E_StatusText");
+            var canvas = GameObject.Find("Canvas");
+            var status = canvas != null ? canvas.transform.Find("InputE2E_Panel/InputE2E_StatusText")?.gameObject : null;
             if (status == null)
             {
                 return string.Empty;
