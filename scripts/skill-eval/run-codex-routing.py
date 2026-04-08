@@ -302,14 +302,20 @@ def route_by_keywords(user_prompt: str) -> dict[str, object] | None:
         )
     if has_any("シーン作成後", "scene作成後") and has_any("hierarchy"):
         return make_prediction(["unity-scene-create", "unity-scene-inspect"], "create_scene", ["sceneName", "path"])
+    if has_any("canvas配下") and has_any("empty") and has_any("作る", "作成"):
+        return make_prediction(["unity-scene-create"], "create_gameobject", ["name", "parentPath"])
     if has_any("詳細確認後", "詳細を確認後") and has_any("コンポーネント値", "値を変え", "値を変更"):
         return make_prediction(
             ["unity-scene-inspect", "unity-gameobject-edit"],
             "get_gameobject_details",
             ["gameObjectName"],
         )
+    if has_any("シーンをロード") and has_any("play開始"):
+        return make_prediction(["unity-scene-create", "unity-playmode-testing"], "load_scene", ["scenePath"])
     if has_any("ui検索結果") and has_any("入力シーケンス"):
         return make_prediction(["unity-ui-automation", "unity-playmode-testing"], "find_ui_elements", ["namePattern"])
+    if has_any("uiボタン") and has_any("押して") and has_any("スクリーンショット"):
+        return make_prediction(["unity-ui-automation", "unity-playmode-testing"], "click_ui_element", ["elementPath"])
     if has_any("探してから", "検索してから") and has_any("rename", "リネーム"):
         return make_prediction(["unity-csharp-navigate", "unity-csharp-edit"], "find_symbol", ["name"])
     if has_any("ローカル検索") and has_any("クラス") and has_any("新規作成", "作りたい"):
@@ -334,6 +340,8 @@ def route_by_keywords(user_prompt: str) -> dict[str, object] | None:
         return make_prediction(["unity-gameobject-edit"], "list_components", ["gameObjectPath"])
     if has_any("レイヤー一覧"):
         return make_prediction(["unity-gameobject-edit"], "manage_layers", ["action"])
+    if has_any("タグ") and has_any("追加したい"):
+        return make_prediction(["unity-gameobject-edit"], "manage_tags", ["action", "tagName"])
     if has_any("rigidbody", "boxcollider", "collider", "コンポーネント") and has_any("追加したい", "追加して"):
         return make_prediction(["unity-scene-create"], "add_component", ["gameObjectPath", "componentType"])
     if has_any("rigidbody") and has_any("mass"):
@@ -365,6 +373,8 @@ def route_by_keywords(user_prompt: str) -> dict[str, object] | None:
         return make_prediction(["unity-asset-management"], "manage_asset_database", ["action"])
     if has_any("別パス") and has_any("コピー"):
         return make_prediction(["unity-asset-management"], "manage_asset_database", ["action", "fromPath", "toPath"])
+    if has_any("未使用アセット") and has_any("検出"):
+        return make_prediction(["unity-asset-management"], "analyze_asset_dependencies", ["action"])
     if has_any("companyname") and has_any("更新"):
         return make_prediction(["unity-editor-tools"], "update_project_settings", ["confirmChanges", "player"])
     if has_any("project設定", "project settings") and has_any("見て") and has_any("更新"):
@@ -384,12 +394,20 @@ def route_by_keywords(user_prompt: str) -> dict[str, object] | None:
         if has_any("参照チェック"):
             keys.append("failOnReferences")
         return make_prediction(["unity-csharp-edit"], "remove_symbol", keys)
+    if has_any("メソッド本体") and has_any("置換"):
+        return make_prediction(["unity-csharp-edit"], "replace_symbol_body", ["relative", "namePath", "body"])
+    if has_any("jump") and has_any("後に") and has_any("新規メソッド"):
+        return make_prediction(["unity-csharp-edit"], "insert_after_symbol", ["relative", "namePath", "text"])
     if has_any("newtext") and has_any("文法") and has_any("検証"):
         return make_prediction(["unity-csharp-edit"], "validate_text_edits", ["relative", "newText"])
+    if has_any("play検証はまだ不要") and has_any(".cs") and has_any("実装したい"):
+        return make_prediction(["unity-csharp-edit"], "write_csharp_file", ["relative", "newText"])
     if has_any("クラス") and has_any("assets/") and has_any("作りたい", "新規作成"):
         return make_prediction(["unity-csharp-edit"], "create_class", ["name", "folder"])
     if has_any("ゲームパッド") and has_any("ボタン"):
         return make_prediction(["unity-playmode-testing"], "input_gamepad", ["action", "button", "buttonAction"])
+    if has_any("play") and has_any("space") and has_any("スクリーンショット"):
+        return make_prediction(["unity-playmode-testing"], "input_keyboard", ["action", "key"])
     if has_any("スクリーンショット") and has_any("撮りたい"):
         return make_prediction(["unity-playmode-testing"], "capture_screenshot", ["captureMode"])
 
