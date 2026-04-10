@@ -1,52 +1,53 @@
 ---
 name: unity-scene-create
-description: Create and bootstrap Unity scenes with unity-cli. Use when the user asks to create a new scene, load or save a scene, add starter GameObjects, or attach components while setting up a level or test scene. Do not use for editing existing objects in place or working inside prefab edit mode; use the dedicated editing or prefab skills for those cases.
-allowed-tools: Bash, Read, Grep, Glob
+description: Create and bootstrap Unity scenes with unity-cli. Use when the user asks to create a new scene, load or save a scene, add starter GameObjects, or attach initial components while bootstrapping a level or test scene. Do not use for editing existing GameObjects in place; use `unity-gameobject-edit`. Do not use inside prefab edit mode; use `unity-prefab-workflow` instead.
+allowed-tools: Bash(unity-cli:*), Read, Grep, Glob
 metadata:
   author: akiojin
-  version: 0.2.0
+  version: 0.3.0
   category: scenes
+  triggers:
+    - scene
+    - bootstrap
+    - create
+    - gameobject
+    - level
+  siblings:
+    - unity-gameobject-edit
+    - unity-prefab-workflow
+    - unity-scene-inspect
+    - unity-cli-usage
+    - unity-ui-automation
 ---
 
-# Scene & GameObject Creation
+# Scene Bootstrap
 
-Create scenes, GameObjects, and attach components via `unity-cli`.
-Read `references/scene-bootstrap-patterns.md` when you need a safer scene setup order or a reminder of common starter patterns.
+Create scenes, add starter GameObjects, and attach initial components via `unity-cli`. This skill owns greenfield scene authoring; it hands off to `unity-gameobject-edit` or `unity-prefab-workflow` once objects already exist.
 
 ## Use When
 
-- The user wants to create a new scene from scratch.
-- The user asks to add initial objects and components while bootstrapping a scene.
-- The user needs help loading, saving, or organizing a scene setup workflow.
+- The user wants to create a brand-new scene from scratch.
+- The user asks to add initial GameObjects and components while bootstrapping a scene.
+- The user needs help loading, saving, or organising a fresh scene authoring workflow.
 
 ## Do Not Use When
 
-- The request is mainly about mutating existing objects in an already-prepared scene.
-- The work is focused on prefab editing rather than scene authoring.
+- The request mainly mutates existing objects in an already-prepared scene; use `unity-gameobject-edit`.
+- The work happens inside prefab edit mode; use `unity-prefab-workflow`.
+- The user only wants to read or analyse a scene; use `unity-scene-inspect`.
 
-## Workflow
+## Preferred Flow
 
-1. Create or load a scene
-2. Create GameObjects (with optional primitive type)
-3. Add components
-4. Save the scene
-
-## Commands
+1. Create or load a scene with `scene create` or `raw load_scene`.
+2. Create GameObjects (optionally with a primitive type and `parentPath`).
+3. Attach components via `add_component`.
+4. Persist with `save_scene` after the bulk authoring is complete.
 
 ```bash
-# Scene management
-unity-cli scene create <name> --path Assets/Scenes/
-unity-cli raw create_scene --json '{"sceneName":"MyScene","path":"Assets/Scenes/","loadScene":true}'
-unity-cli raw load_scene --json '{"scenePath":"Assets/Scenes/MyScene.unity"}'
-unity-cli raw save_scene --json '{"scenePath":"Assets/Scenes/MyScene.unity"}'
-
-# GameObject creation
+unity-cli scene create MainMenu --path Assets/Scenes/
 unity-cli raw create_gameobject --json '{"name":"Player","primitiveType":"Cube"}'
-unity-cli raw create_gameobject --json '{"name":"Empty","parentPath":"/Canvas"}'
-
-# Add components
 unity-cli raw add_component --json '{"gameObjectPath":"/Player","componentType":"Rigidbody"}'
-unity-cli raw add_component --json '{"gameObjectPath":"/Player","componentType":"BoxCollider"}'
+unity-cli raw save_scene --json '{"scenePath":"Assets/Scenes/MainMenu.unity"}'
 ```
 
 ## Examples
@@ -55,9 +56,7 @@ unity-cli raw add_component --json '{"gameObjectPath":"/Player","componentType":
 - "Load `Assets/Scenes/TestScene.unity`, add a camera rig, then save it."
 - "Bootstrap a simple empty scene for UI testing."
 
-## Common Issues
+## References
 
-- The scene is created but not persisted: call `save_scene` after bulk changes.
-- Objects end up in the wrong place: set `parentPath` explicitly during creation.
-- Primitive setup is inconsistent: use supported `primitiveType` values such as `cube`, `sphere`, `capsule`, `cylinder`, `plane`, or `quad`.
-- If the task turns into modifying existing objects rather than creating them, switch to `unity-gameobject-edit`.
+- [runtime-checklist.md](references/runtime-checklist.md): connection and instance selection prerequisites.
+- [scene-bootstrap-patterns.md](references/scene-bootstrap-patterns.md): safe scene setup order and starter patterns.

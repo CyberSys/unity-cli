@@ -1,9 +1,14 @@
 {
   "name": "unity-cli",
-  "version": "0.1.0",
-  "description": "Claude Code plugin providing workflow-oriented skills for Rust-based unity-cli automation.",
+  "version": "0.2.0",
+  "description": "Workflow-oriented Claude Code skills for Unity Editor automation via the Rust unity-cli.",
   "author": {
     "name": "akiojin",
     "url": "https://github.com/akiojin"
-  }
+  },
+  "homepage": "https://github.com/akiojin/unity-cli",
+  "repository": "https://github.com/akiojin/unity-cli",
+  "license": "MIT",
+  "keywords": ["unity", "automation", "skills", "claude-code"],
+  "skills": "./skills/"
 }

@@ -280,7 +280,7 @@ CI is defined in `.github/workflows/lint.yml`, `.github/workflows/test.yml`, and
 
 | Job | Trigger | Description |
 | ----- | --------- | ------------- |
-| Skill Contract Check (required) | push / PR | `scripts/skill-eval/static-skill-contract-check.sh` |
+| Skill Contract Lint (required) | push / PR | `cargo run -- skills lint --severity error` (Skill Contract v1; SPEC #160) |
 | Rust Tests (required) | push / PR | `cargo test` |
 | LSP Tests (required) | push / PR | `dotnet test lsp/Server.Tests.csproj` |
 | LSP Performance (required) | push / PR | `scripts/lsp-perf-check.sh` (full cases + history artifact) |
@@ -354,7 +354,7 @@ Benchmark and history files:
 Run static validation (required in PR CI):
 
 ```bash
-./scripts/skill-eval/static-skill-contract-check.sh
+cargo run -- skills lint --severity error
 ```
 
 Run routing eval with predictions:
@@ -721,7 +721,7 @@ CI は `.github/workflows/lint.yml` / `.github/workflows/test.yml` / `.github/wo
 
 | ジョブ | トリガー | 内容 |
 | -------- | --------- | ------ |
-| Skill Contract Check (required) | push / PR | `scripts/skill-eval/static-skill-contract-check.sh` |
+| Skill Contract Lint (required) | push / PR | `cargo run -- skills lint --severity error` (Skill Contract v1; SPEC #160) |
 | Rust Tests (required) | push / PR | `cargo test` |
 | LSP Tests (required) | push / PR | `dotnet test lsp/Server.Tests.csproj` |
 | LSP Performance (required) | push / PR | `scripts/lsp-perf-check.sh`（全ケース実行 + 履歴artifact） |
@@ -795,7 +795,7 @@ cat .unity/perf/lsp-history.jsonl | tail -n 5
 静的検証（PR CI 必須）:
 
 ```bash
-./scripts/skill-eval/static-skill-contract-check.sh
+cargo run -- skills lint --severity error
 ```
 
 予測JSONを使ったルーティング評価:

@@ -1,0 +1,22 @@
+{
+  "name": "unity-cli-marketplace",
+  "interface": {
+    "displayName": "Unity CLI Marketplace",
+    "shortDescription": "Workflow-oriented Codex skills for Unity Editor automation",
+    "category": "Productivity"
+  },
+  "plugins": [
+    {
+      "name": "unity-cli",
+      "source": {
+        "source": "local",
+        "path": "../../.codex-plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "NONE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
