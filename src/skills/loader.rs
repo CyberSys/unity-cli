@@ -189,6 +189,10 @@ fn collect_references(dir: &Path) -> Result<Vec<PathBuf>> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+
     use super::*;
 
     #[test]
@@ -210,5 +214,69 @@ mod tests {
         assert_eq!(fm.metadata.category.as_deref(), Some("scenes"));
         assert_eq!(fm.metadata.triggers, vec!["scene", "hierarchy"]);
         assert_eq!(fm.metadata.siblings, vec!["unity-scene-create"]);
+    }
+
+    #[test]
+    fn load_skills_supports_single_skill_root_and_dir_name_fallback() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("unity-direct");
+        fs::create_dir_all(dir.join("references")).unwrap();
+        fs::write(
+            dir.join("SKILL.md"),
+            "---\ndescription: Manage Unity assets with unity-cli. Use when the user asks for assets. Do not use for `unity-gameobject-edit`.\nallowed-tools: Bash(unity-cli:*), Read\nuser-invocable: false\nmetadata:\n  author: tester\n  version: 1\n  category: assets\n  triggers:\n    - asset\n  siblings:\n    - unity-gameobject-edit\n---\n\n# Direct Skill\n",
+        )
+        .unwrap();
+        fs::write(dir.join("references/runtime-checklist.md"), "# Runtime\n").unwrap();
+
+        let skills = load_skills(&dir).unwrap();
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].name, "unity-direct");
+        assert_eq!(skills[0].frontmatter.user_invocable, Some(false));
+        assert_eq!(skills[0].frontmatter.metadata.version.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn load_skills_handles_missing_root_and_skips_non_skill_entries() {
+        let tmp = TempDir::new().unwrap();
+        let missing = tmp.path().join("missing");
+        let err = load_skills(&missing).unwrap_err().to_string();
+        assert!(err.contains("skills root not found"));
+
+        fs::write(tmp.path().join("README.md"), "not a directory").unwrap();
+        fs::create_dir_all(tmp.path().join("misc-tool")).unwrap();
+        fs::create_dir_all(tmp.path().join("unity-empty")).unwrap();
+
+        let skills = load_skills(tmp.path()).unwrap();
+        assert!(skills.is_empty());
+    }
+
+    #[test]
+    fn split_frontmatter_and_parse_frontmatter_cover_edge_cases() {
+        assert_eq!(split_frontmatter("plain text"), ("", "plain text"));
+        assert_eq!(split_frontmatter("---"), ("", "---"));
+        assert_eq!(
+            split_frontmatter("---\r\nname: foo\r\n---\r\nbody"),
+            ("name: foo\r", "body")
+        );
+        assert!(parse_frontmatter("").unwrap().description.is_none());
+        assert!(parse_frontmatter(": bad").is_err());
+        assert!(parse_frontmatter("- item").is_err());
+    }
+
+    #[test]
+    fn parse_frontmatter_and_collect_references_cover_optional_branches() {
+        let raw = "name: foo\nmetadata:\n  version: 1.5\n  triggers: not-a-sequence\n  siblings:\n    - one\n  extra: ignored\nother: ignored\n";
+        let fm = parse_frontmatter(raw).unwrap();
+        assert_eq!(fm.name.as_deref(), Some("foo"));
+        assert_eq!(fm.metadata.version.as_deref(), Some("1.5"));
+        assert!(fm.metadata.triggers.is_empty());
+        assert_eq!(fm.metadata.siblings, vec!["one"]);
+
+        let tmp = TempDir::new().unwrap();
+        let refs = tmp.path().join("references");
+        fs::create_dir_all(refs.join("nested")).unwrap();
+        fs::write(refs.join("a.md"), "A").unwrap();
+        let collected = collect_references(tmp.path()).unwrap();
+        assert_eq!(collected, vec![refs.join("a.md")]);
     }
 }

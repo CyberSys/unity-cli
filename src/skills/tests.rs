@@ -3,11 +3,15 @@
 #![cfg(test)]
 
 use std::fs;
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 use super::loader::load_skills;
-use super::rules::{run_all, RuleContext};
+use super::model::{allowed_tool_set, RuleId, Severity, Violation};
+use super::report::{render, ReportFormat};
+use super::rules::{rule_r18, rule_r19, rule_r20, rule_r21, run_all, RuleContext};
+use super::runner::{discover_root, lint, LintOptions, LintOutcome};
 
 const VALID_DESC: &str = "Manage Unity prefab assets with unity-cli. Use when the user asks to create a prefab from a scene object or open a prefab in edit mode. Do not use for general scene object editing; use `unity-gameobject-edit` instead.";
 
@@ -112,6 +116,42 @@ fn r01_missing_description_fires() {
 }
 
 #[test]
+fn r01_missing_multiple_required_fields_fire() {
+    let tmp = TempDir::new().unwrap();
+    write_skill(
+        tmp.path(),
+        "unity-missing-fields",
+        "name:\nmetadata:\n  siblings:\n    - unity-gameobject-edit\n",
+        &valid_body(),
+    );
+    write_skill(
+        tmp.path(),
+        "unity-gameobject-edit",
+        &sibling_frontmatter("unity-gameobject-edit", "unity-missing-fields"),
+        &valid_body(),
+    );
+
+    let skills = load_skills(tmp.path()).unwrap();
+    let skill = skills
+        .iter()
+        .find(|candidate| candidate.name == "unity-missing-fields")
+        .unwrap();
+    let violations = super::rules::rule_r01(skill);
+    let messages: Vec<&str> = violations.iter().map(|v| v.message.as_str()).collect();
+    assert!(messages.iter().any(|msg| msg.contains("missing `name`")));
+    assert!(messages.iter().any(|msg| msg.contains("missing `description`")));
+    assert!(messages.iter().any(|msg| msg.contains("missing `allowed-tools`")));
+    assert!(messages.iter().any(|msg| msg.contains("missing `metadata.author`")));
+    assert!(messages.iter().any(|msg| msg.contains("missing `metadata.version`")));
+    assert!(messages.iter().any(|msg| msg.contains("missing `metadata.category`")));
+    assert!(
+        messages
+            .iter()
+            .any(|msg| msg.contains("missing `metadata.triggers`"))
+    );
+}
+
+#[test]
 fn r02_name_mismatch_fires() {
     let tmp = TempDir::new().unwrap();
     write_skill(
@@ -174,6 +214,37 @@ fn r05_uppercase_trigger_fires() {
     );
     let violations = lint_dir(tmp.path());
     assert!(violations.iter().any(|r| r == "R05"));
+}
+
+#[test]
+fn r05_empty_and_duplicate_triggers_fire() {
+    let tmp = TempDir::new().unwrap();
+    write_skill(
+        tmp.path(),
+        "unity-badtriggers",
+        "name: unity-badtriggers\ndescription: Manage Unity prefabs with unity-cli. Use when the user asks for prefabs. Do not use for assets; use `unity-gameobject-edit`.\nallowed-tools: Bash(unity-cli:*), Read\nmetadata:\n  author: tester\n  version: 0.3.0\n  category: prefabs\n  triggers:\n    - \"\"\n    - prefab\n    - prefab\n  siblings:\n    - unity-gameobject-edit\n",
+        &valid_body(),
+    );
+    write_skill(
+        tmp.path(),
+        "unity-gameobject-edit",
+        &sibling_frontmatter("unity-gameobject-edit", "unity-badtriggers"),
+        &valid_body(),
+    );
+
+    let skills = load_skills(tmp.path()).unwrap();
+    let skill = skills
+        .iter()
+        .find(|candidate| candidate.name == "unity-badtriggers")
+        .unwrap();
+    let violations = super::rules::rule_r05(skill);
+    let messages: Vec<&str> = violations.iter().map(|v| v.message.as_str()).collect();
+    assert!(
+        messages
+            .iter()
+            .any(|msg| msg.contains("contains empty string"))
+    );
+    assert!(messages.iter().any(|msg| msg.contains("duplicate trigger `prefab`")));
 }
 
 #[test]
@@ -389,6 +460,235 @@ fn r17_missing_runtime_checklist_fires() {
     );
     let violations = lint_dir(tmp.path());
     assert!(violations.iter().any(|r| r == "R17"));
+}
+
+#[test]
+fn r18_long_reference_without_toc_fires() {
+    let tmp = TempDir::new().unwrap();
+    let skill_dir = write_skill(
+        tmp.path(),
+        "unity-longref",
+        &valid_frontmatter("unity-longref"),
+        &valid_body(),
+    );
+    write_skill(
+        tmp.path(),
+        "unity-gameobject-edit",
+        &sibling_frontmatter("unity-gameobject-edit", "unity-longref"),
+        &valid_body(),
+    );
+    let lines: Vec<String> = (0..120).map(|i| format!("line {i}")).collect();
+    fs::write(
+        skill_dir.join("references/long-guide.md"),
+        format!("# Long Guide\n\n{}\n", lines.join("\n")),
+    )
+    .unwrap();
+
+    let skills = load_skills(tmp.path()).unwrap();
+    let skill = skills.iter().find(|s| s.name == "unity-longref").unwrap();
+    let violations = rule_r18(skill);
+    assert!(violations.iter().any(|v| v.rule == "R18"));
+}
+
+#[test]
+fn r19_reference_link_to_reference_fires() {
+    let tmp = TempDir::new().unwrap();
+    let skill_dir = write_skill(
+        tmp.path(),
+        "unity-refnest",
+        &valid_frontmatter("unity-refnest"),
+        &valid_body(),
+    );
+    write_skill(
+        tmp.path(),
+        "unity-gameobject-edit",
+        &sibling_frontmatter("unity-gameobject-edit", "unity-refnest"),
+        &valid_body(),
+    );
+    fs::write(
+        skill_dir.join("references/nested.md"),
+        "# Nested\n\n[runtime](runtime-checklist.md)\n",
+    )
+    .unwrap();
+
+    let skills = load_skills(tmp.path()).unwrap();
+    let skill = skills.iter().find(|s| s.name == "unity-refnest").unwrap();
+    let violations = rule_r19(skill);
+    assert!(violations.iter().any(|v| v.rule == "R19"));
+}
+
+#[test]
+fn r20_and_r21_symlink_rules_cover_missing_and_valid_targets() {
+    let tmp = TempDir::new().unwrap();
+    let skill_dir = write_skill(
+        tmp.path(),
+        "unity-symlinked",
+        &valid_frontmatter("unity-symlinked"),
+        &valid_body(),
+    );
+    write_skill(
+        tmp.path(),
+        "unity-gameobject-edit",
+        &sibling_frontmatter("unity-gameobject-edit", "unity-symlinked"),
+        &valid_body(),
+    );
+    fs::create_dir_all(tmp.path().join(".claude/skills")).unwrap();
+    fs::create_dir_all(tmp.path().join(".agents/skills")).unwrap();
+
+    let skills = load_skills(tmp.path()).unwrap();
+    let skill = skills.iter().find(|s| s.name == "unity-symlinked").unwrap();
+    let ctx = RuleContext {
+        skills: &skills,
+        repo_root: tmp.path(),
+    };
+
+    let missing_claude = rule_r20(skill, &ctx);
+    let missing_agents = rule_r21(skill, &ctx);
+    assert!(missing_claude.iter().any(|v| v.rule == "R20"));
+    assert!(missing_agents.iter().any(|v| v.rule == "R21"));
+
+    symlink(
+        skill_dir.canonicalize().unwrap(),
+        tmp.path().join(".claude/skills/unity-symlinked"),
+    )
+    .unwrap();
+    symlink(
+        skill_dir.canonicalize().unwrap(),
+        tmp.path().join(".agents/skills/unity-symlinked"),
+    )
+    .unwrap();
+
+    assert!(rule_r20(skill, &ctx).is_empty());
+    assert!(rule_r21(skill, &ctx).is_empty());
+}
+
+#[test]
+fn report_and_runner_cover_text_json_discovery_and_error_paths() {
+    let tmp = TempDir::new().unwrap();
+    let skills_root = tmp.path().join(".claude-plugin/plugins/unity-cli/skills");
+    fs::create_dir_all(&skills_root).unwrap();
+    write_skill(
+        &skills_root,
+        "unity-prefab-workflow",
+        &valid_frontmatter("unity-prefab-workflow"),
+        &valid_body(),
+    );
+    write_skill(
+        &skills_root,
+        "unity-gameobject-edit",
+        &sibling_frontmatter("unity-gameobject-edit", "unity-prefab-workflow"),
+        &valid_body(),
+    );
+
+    let nested = tmp.path().join("nested/project");
+    fs::create_dir_all(&nested).unwrap();
+    let discovered = discover_root(&nested).unwrap();
+    assert_eq!(discovered.0, skills_root);
+    assert_eq!(discovered.1, tmp.path());
+    assert!(discover_root(TempDir::new().unwrap().path()).is_none());
+
+    let clean = lint(&LintOptions {
+        root: discovered.0.clone(),
+        repo_root: discovered.1.clone(),
+        severity: Severity::Error,
+    })
+    .unwrap();
+    assert!(clean.violations.is_empty());
+    assert!(!clean.has_errors(Severity::Error));
+    assert!(!clean.has_errors(Severity::Warning));
+
+    let sample = LintOutcome {
+        skills: vec!["unity-prefab-workflow".to_string()],
+        violations: vec![Violation::new(
+            RuleId::R01FrontmatterRequired,
+            Severity::Error,
+            "unity-prefab-workflow",
+            skills_root.join("unity-prefab-workflow/SKILL.md"),
+            "missing description",
+        )],
+    };
+    let error_text = render(&sample, ReportFormat::Text, Severity::Error);
+    let warning_text = render(&sample, ReportFormat::Text, Severity::Warning);
+    let json_text = render(&sample, ReportFormat::Json, Severity::Error);
+    assert!(error_text.contains("error [R01]"));
+    assert!(warning_text.contains("warning [R01]"));
+    assert!(error_text.contains("1 skills checked, 1 violations"));
+    let parsed: serde_json::Value = serde_json::from_str(&json_text).unwrap();
+    assert_eq!(parsed.as_array().unwrap().len(), 1);
+    assert_eq!(parsed[0]["rule"], "R01");
+
+    let empty_root = tmp.path().join("empty");
+    fs::create_dir_all(&empty_root).unwrap();
+    let err = lint(&LintOptions {
+        root: empty_root,
+        repo_root: tmp.path().to_path_buf(),
+        severity: Severity::Error,
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("no `unity-*` skills found"));
+
+    let blocked = LintOutcome {
+        skills: vec!["unity-prefab-workflow".to_string()],
+        violations: sample.violations.clone(),
+    };
+    assert!(blocked.has_errors(Severity::Error));
+
+    let invalid_root = tmp.path().join("invalid");
+    write_skill(
+        &invalid_root,
+        "unity-zed",
+        "name: unity-zed\nallowed-tools: Bash(unity-cli:*), Read\nmetadata:\n  author: tester\n  version: 0.3.0\n  category: scenes\n  triggers:\n    - zed\n",
+        &valid_body(),
+    );
+    write_skill(
+        &invalid_root,
+        "unity-alpha",
+        "name: unity-alpha\nallowed-tools: Bash(unity-cli:*), Read\nmetadata:\n  author: tester\n  version: 0.3.0\n  category: scenes\n  triggers:\n    - alpha\n",
+        &valid_body(),
+    );
+    let invalid = lint(&LintOptions {
+        root: invalid_root,
+        repo_root: tmp.path().to_path_buf(),
+        severity: Severity::Error,
+    })
+    .unwrap();
+    assert_eq!(invalid.violations[0].skill, "unity-alpha");
+    assert_eq!(invalid.violations[1].skill, "unity-zed");
+}
+
+#[test]
+fn model_helpers_cover_skill_accessors_and_tool_sets() {
+    let tmp = TempDir::new().unwrap();
+    write_skill(
+        tmp.path(),
+        "unity-prefab-workflow",
+        &valid_frontmatter("unity-prefab-workflow"),
+        &valid_body(),
+    );
+    write_skill(
+        tmp.path(),
+        "unity-gameobject-edit",
+        &sibling_frontmatter("unity-gameobject-edit", "unity-prefab-workflow"),
+        &valid_body(),
+    );
+
+    let skills = load_skills(tmp.path()).unwrap();
+    let skill = skills
+        .iter()
+        .find(|candidate| candidate.name == "unity-prefab-workflow")
+        .unwrap();
+    assert_eq!(skill.body_line_count(), valid_body().lines().count() + 1);
+    assert_eq!(skill.description(), VALID_DESC);
+    assert_eq!(skill.triggers(), &["prefab".to_string()]);
+    assert_eq!(skill.siblings(), &["unity-gameobject-edit".to_string()]);
+
+    let prefab_tools = allowed_tool_set("unity-prefab-workflow");
+    let edit_tools = allowed_tool_set("unity-csharp-edit");
+    assert!(prefab_tools.contains("Read"));
+    assert!(!prefab_tools.contains("Edit"));
+    assert!(edit_tools.contains("Edit"));
+    assert!(edit_tools.contains("Write"));
 }
 
 #[test]
