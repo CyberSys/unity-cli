@@ -139,16 +139,24 @@ fn r01_missing_multiple_required_fields_fire() {
     let violations = super::rules::rule_r01(skill);
     let messages: Vec<&str> = violations.iter().map(|v| v.message.as_str()).collect();
     assert!(messages.iter().any(|msg| msg.contains("missing `name`")));
-    assert!(messages.iter().any(|msg| msg.contains("missing `description`")));
-    assert!(messages.iter().any(|msg| msg.contains("missing `allowed-tools`")));
-    assert!(messages.iter().any(|msg| msg.contains("missing `metadata.author`")));
-    assert!(messages.iter().any(|msg| msg.contains("missing `metadata.version`")));
-    assert!(messages.iter().any(|msg| msg.contains("missing `metadata.category`")));
-    assert!(
-        messages
-            .iter()
-            .any(|msg| msg.contains("missing `metadata.triggers`"))
-    );
+    assert!(messages
+        .iter()
+        .any(|msg| msg.contains("missing `description`")));
+    assert!(messages
+        .iter()
+        .any(|msg| msg.contains("missing `allowed-tools`")));
+    assert!(messages
+        .iter()
+        .any(|msg| msg.contains("missing `metadata.author`")));
+    assert!(messages
+        .iter()
+        .any(|msg| msg.contains("missing `metadata.version`")));
+    assert!(messages
+        .iter()
+        .any(|msg| msg.contains("missing `metadata.category`")));
+    assert!(messages
+        .iter()
+        .any(|msg| msg.contains("missing `metadata.triggers`")));
 }
 
 #[test]
@@ -239,12 +247,12 @@ fn r05_empty_and_duplicate_triggers_fire() {
         .unwrap();
     let violations = super::rules::rule_r05(skill);
     let messages: Vec<&str> = violations.iter().map(|v| v.message.as_str()).collect();
-    assert!(
-        messages
-            .iter()
-            .any(|msg| msg.contains("contains empty string"))
-    );
-    assert!(messages.iter().any(|msg| msg.contains("duplicate trigger `prefab`")));
+    assert!(messages
+        .iter()
+        .any(|msg| msg.contains("contains empty string")));
+    assert!(messages
+        .iter()
+        .any(|msg| msg.contains("duplicate trigger `prefab`")));
 }
 
 #[test]
