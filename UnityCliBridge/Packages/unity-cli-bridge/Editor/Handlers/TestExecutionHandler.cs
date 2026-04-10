@@ -65,6 +65,7 @@ namespace UnityCliBridge.Handlers
                 string category = parameters["category"]?.ToString();
                 string namespaceFilter = parameters["namespace"]?.ToString();
                 bool includeDetails = parameters["includeDetails"]?.ToObject<bool>() ?? false;
+                bool disableDomainReload = parameters["disableDomainReload"]?.ToObject<bool>() ?? false;
                 string exportPath = parameters["exportPath"]?.ToString();
                 string resolvedExportPath = ResolveExportPath(exportPath, testMode);
 
@@ -162,9 +163,12 @@ namespace UnityCliBridge.Handlers
                     filterSettings.assemblyNames = new[] { namespaceFilter };
                 }
 
-                // Reduce domain reload impact during tests that may enter Play Mode.
-                // Even EditMode tests can enter Play Mode via EnterPlayMode/ExitPlayMode (UnityTest).
-                ApplyEnterPlayModeOptionsPatch();
+                // Keep Unity's configured Enter Play Mode behavior by default.
+                // Some PlayMode tests depend on the normal domain reload lifecycle.
+                if (disableDomainReload)
+                {
+                    ApplyEnterPlayModeOptionsPatch();
+                }
 
                 currentCollector = new TestResultCollector(resolvedExportPath, includeDetails, testMode);
                 var collector = currentCollector;

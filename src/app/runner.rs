@@ -7,7 +7,8 @@ use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
     Cli, CliCommand, Command, InstancesCommand, LspCommand, LspdCommand, OutputFormat, RawArgs,
-    SceneCommand, SystemCommand, ToolCommand, UnitydCommand,
+    SceneCommand, SkillFormat, SkillSeverity, SkillsCommand, SystemCommand, ToolCommand,
+    UnitydCommand,
 };
 use crate::config::RuntimeConfig;
 use crate::core::command_stats::{self, CliCommandTiming};
@@ -206,6 +207,15 @@ pub async fn run_with_cli(cli: Cli) -> Result<()> {
             }
             UnitydCommand::Serve => {
                 unityd::serve_forever().await?;
+            }
+        },
+        Command::Skills { command } => match command {
+            SkillsCommand::Lint {
+                root,
+                format,
+                severity,
+            } => {
+                run_skills_lint(root.as_deref(), *format, *severity)?;
             }
         },
         Command::Batch { json, stdin } => {
@@ -712,6 +722,68 @@ fn print_value(value: &Value, format: OutputFormat) -> Result<()> {
                 println!("{}", serde_json::to_string_pretty(value)?);
             }
         }
+    }
+    Ok(())
+}
+
+fn run_skills_lint(
+    root: Option<&std::path::Path>,
+    format: SkillFormat,
+    severity: SkillSeverity,
+) -> Result<()> {
+    use crate::skills::model::Severity;
+    use crate::skills::report::{render, ReportFormat};
+    use crate::skills::{lint, LintOptions};
+
+    let cwd = std::env::current_dir().context("get current_dir")?;
+    let (skills_root, repo_root) = match root {
+        Some(p) => {
+            let abs = if p.is_absolute() {
+                p.to_path_buf()
+            } else {
+                cwd.join(p)
+            };
+            let repo = abs
+                .ancestors()
+                .find(|a| a.join(".claude-plugin").is_dir() || a.join(".git").is_dir())
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| cwd.clone());
+            (abs, repo)
+        }
+        None => match crate::skills::runner::discover_root(&cwd) {
+            Some(pair) => pair,
+            None => {
+                return Err(anyhow!(
+                    "could not auto-detect skills root; pass `--root <path>`"
+                ));
+            }
+        },
+    };
+
+    let sev = match severity {
+        SkillSeverity::Warning => Severity::Warning,
+        SkillSeverity::Error => Severity::Error,
+    };
+    let outcome = lint(&LintOptions {
+        root: skills_root,
+        repo_root,
+        severity: sev,
+    })?;
+
+    let fmt = match format {
+        SkillFormat::Text => ReportFormat::Text,
+        SkillFormat::Json => ReportFormat::Json,
+    };
+    let rendered = render(&outcome, fmt, sev);
+    print!("{rendered}");
+    if let SkillFormat::Json = format {
+        if !rendered.ends_with('\n') {
+            println!();
+        }
+    }
+
+    if outcome.has_errors(sev) {
+        std::process::exit(1);
     }
     Ok(())
 }

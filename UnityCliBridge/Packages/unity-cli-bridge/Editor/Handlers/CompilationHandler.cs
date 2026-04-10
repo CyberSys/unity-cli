@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.IO;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using Newtonsoft.Json.Linq;
@@ -31,6 +32,9 @@ namespace UnityCliBridge.Handlers
         // Mode bits for script compilation entries (Unity internal LogEntry.mode)
         private const int ModeBitScriptCompileError = 1 << 12;   // 0x00001000
         private const int ModeBitScriptCompileWarning = 1 << 13; // 0x00002000
+        private static readonly Regex CompilerDiagnosticRegex = new Regex(
+            @"\)\s*:\s*(error|warning)\s+(?:CS|BC|SG|AD|NU|IDE|CA)\d+",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /// <summary>
         /// Get current compilation state and recent errors
@@ -185,9 +189,12 @@ namespace UnityCliBridge.Handlers
 
                 var logEntryType = typeof(EditorApplication).Assembly.GetType("UnityEditor.LogEntry");
                 var modeField = logEntryType?.GetField("mode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                var messageField = logEntryType?.GetField("message", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
                 if (startMethod != null && endMethod != null && getCount != null && getEntry != null && modeField != null)
                 {
+                    int parsedCompErr = 0;
+                    int parsedCompWarn = 0;
                     startMethod.Invoke(null, null);
                     try
                     {
@@ -201,6 +208,25 @@ namespace UnityCliBridge.Handlers
                                 compErr++;
                             if ((mode & ModeBitScriptCompileWarning) != 0)
                                 compWarn++;
+
+                            if (messageField?.GetValue(entry) is string message &&
+                                TryClassifyCompilerDiagnostic(message, out bool isError, out bool isWarning))
+                            {
+                                if (isError)
+                                {
+                                    parsedCompErr++;
+                                }
+                                else if (isWarning)
+                                {
+                                    parsedCompWarn++;
+                                }
+                            }
+                        }
+
+                        if (parsedCompErr > 0 || parsedCompWarn > 0)
+                        {
+                            compErr = parsedCompErr;
+                            compWarn = parsedCompWarn;
                         }
                     }
                     finally
@@ -214,6 +240,27 @@ namespace UnityCliBridge.Handlers
                 BridgeLogger.LogWarning("CompilationHandler", $"GetErrorCounts failed: {ex.Message}");
             }
             return (compErr, compWarn, consErr, consWarn);
+        }
+
+        private static bool TryClassifyCompilerDiagnostic(string message, out bool isError, out bool isWarning)
+        {
+            isError = false;
+            isWarning = false;
+
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return false;
+            }
+
+            var normalized = message.Replace("\r", string.Empty);
+            if (!CompilerDiagnosticRegex.IsMatch(normalized))
+            {
+                return false;
+            }
+
+            isError = normalized.IndexOf(": error ", StringComparison.OrdinalIgnoreCase) >= 0;
+            isWarning = !isError && normalized.IndexOf(": warning ", StringComparison.OrdinalIgnoreCase) >= 0;
+            return isError || isWarning;
         }
 
         private static string GetLastAssemblyWriteTime()

@@ -12,8 +12,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - name: Run static skill contract check
-        run: ./scripts/skill-eval/static-skill-contract-check.sh
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run unity-cli skills lint
+        run: cargo run --quiet -- skills lint --severity error --format text
+      - name: Emit JSON report
+        if: always()
+        run: |
+          mkdir -p .unity/skill-eval
+          cargo run --quiet -- skills lint --severity warning --format json \
+            > .unity/skill-eval/skill-static-report.json || true
       - name: Upload static report
         if: always()
         uses: actions/upload-artifact@v7

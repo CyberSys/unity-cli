@@ -1,3 +1,33 @@
+## [0.10.0] - 2026-04-10
+
+### 🚀 Features
+
+- *(skills)* Introduce Skill Contract v1, unity-cli skills lint, dual plugin distribution (#160)
+- *(skills)* Add unity development loop skill
+
+### 🐛 Bug Fixes
+
+- Resolve issue 137 and align unity project updates
+
+### 🎨 Styling
+
+- Format skill coverage tests
+
+### 🧪 Testing
+
+- *(skills)* Raise coverage and normalize workflow skill
+- *(skill-routing)* Tighten runner rules
+
+### ⚙️ Miscellaneous Tasks
+
+- *(deps)* Add cargo ecosystem to dependabot config
+- *(deps)* Bump pnpm/action-setup from 4 to 5
+- *(deps)* Bump the npm_and_yarn group across 1 directory with 5 updates
+- *(deps)* Bump codecov/codecov-action from 5 to 6
+- *(deps)* Bump rustls-webpki in the cargo group across 1 directory
+- *(deps)* Bump undici in the npm_and_yarn group across 1 directory
+- *(deps)* Bump the npm_and_yarn group with 2 updates
+
 ## [0.9.0] - 2026-03-13
 
 ### 🚀 Features

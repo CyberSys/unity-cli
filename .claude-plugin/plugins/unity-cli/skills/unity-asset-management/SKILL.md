@@ -1,17 +1,28 @@
 ---
 name: unity-asset-management
-description: Manage Unity assets and import metadata with unity-cli. Use when the user asks to refresh the Asset Database, inspect asset info, create or modify materials, create animation clips or sprite atlases, update import settings, or analyze asset dependencies before moving or deleting files. Do not use for Addressables-specific workflows or scene object edits.
-allowed-tools: Bash, Read, Grep, Glob
+description: Manage Unity assets and import metadata with unity-cli. Use when the user asks to refresh the asset database, inspect asset info, create or modify a material, create an animation clip or sprite atlas, update import settings, or analyze asset dependencies before moving or deleting files. Do not use for Addressables groups or content builds; use `unity-addressables`. Do not use for scene object edits; use `unity-gameobject-edit`.
+allowed-tools: Bash(unity-cli:*), Read, Grep, Glob
 metadata:
   author: akiojin
-  version: 0.2.0
+  version: 0.3.0
   category: assets
+  triggers:
+    - asset
+    - material
+    - import
+    - animation
+    - sprite
+    - dependency
+  siblings:
+    - unity-addressables
+    - unity-prefab-workflow
+    - unity-gameobject-edit
+    - unity-editor-tools
 ---
 
-# Asset & Material Management
+# Asset Management
 
-Manage the Unity Asset Database, create or modify materials, create animation clips and sprite atlases, and control import settings.
-Read `references/asset-safety.md` when the task involves dependency analysis, import changes, or material updates that may affect many assets.
+Manage the Unity Asset Database, materials, animation clips, sprite atlases, import settings, and asset dependency analysis. This skill is the file/asset complement to `unity-addressables` (which handles groups and content builds).
 
 ## Use When
 
@@ -22,36 +33,21 @@ Read `references/asset-safety.md` when the task involves dependency analysis, im
 
 ## Do Not Use When
 
-- The task is specifically about Addressables groups and content builds.
-- The request is about scene object or prefab editing rather than asset files.
+- The task is Addressables groups or content builds; use `unity-addressables`.
+- The request is about scene-instance edits; use `unity-gameobject-edit`.
+- The work happens inside prefab edit mode; use `unity-prefab-workflow`.
 
-## Recommended Flow
+## Preferred Flow
 
-1. Inspect the target asset or material before changing it.
-2. Run dependency analysis before deleting, moving, or changing shared assets.
+1. Inspect the target asset or material with `manage_asset_database` before changing it.
+2. Run `analyze_asset_dependencies` before deleting, moving, or changing shared assets.
 3. Apply import or material changes with the narrowest possible payload.
-4. Refresh the Asset Database if files changed outside the editor.
-
-## Commands
+4. Call `refresh_assets` after any out-of-editor file change.
 
 ```bash
-# Asset database
 unity-cli raw manage_asset_database --json '{"action":"refresh"}'
-unity-cli raw manage_asset_database --json '{"action":"get_asset_info","assetPath":"Assets/Textures/hero.png"}'
-unity-cli raw refresh_assets --json '{}'
-
-# Materials
 unity-cli raw create_material --json '{"materialPath":"Assets/Materials/HeroMat.mat","shader":"Standard"}'
-unity-cli raw modify_material --json '{"materialPath":"Assets/Materials/HeroMat.mat","properties":{"_Color":{"r":1,"g":0,"b":0,"a":1}}}'
-
-# Animation / Sprite assets
 unity-cli raw create_animation_clip --json '{"clipPath":"Assets/Animations/Hero.anim","spritePaths":["Assets/Sprites/Hero/idle_0.png"],"frameRate":12,"loopTime":true}'
-unity-cli raw create_sprite_atlas --json '{"atlasPath":"Assets/Atlases/UI.spriteatlas","packables":["Assets/Sprites/UI"]}'
-
-# Import settings
-unity-cli raw manage_asset_import_settings --json '{"action":"modify","assetPath":"Assets/Textures/hero.png","settings":{"maxTextureSize":1024}}'
-
-# Dependency analysis
 unity-cli raw analyze_asset_dependencies --json '{"action":"get_dependencies","assetPath":"Assets/Prefabs/Player.prefab","recursive":true}'
 ```
 
@@ -60,12 +56,9 @@ unity-cli raw analyze_asset_dependencies --json '{"action":"get_dependencies","a
 - "Refresh the asset database and inspect `Assets/Textures/hero.png`."
 - "Create a material for the player and tint it red."
 - "Generate an animation clip from a set of sprite frames."
-- "Create a sprite atlas for a folder of UI sprites."
-- "Check which assets depend on `Player.prefab` before I move it."
+- "Check which assets depend on `Player.prefab` before moving it."
 
-## Common Issues
+## References
 
-- Asset changes made outside Unity are not visible: run `refresh_assets`.
-- Import changes affect more files than expected: inspect the asset first and keep the payload focused.
-- Deleting or moving assets is risky: use `analyze_asset_dependencies` before the mutation.
-- Addressables content issues belong in `unity-addressables`, not this skill.
+- [runtime-checklist.md](references/runtime-checklist.md): connection and instance prerequisites.
+- [asset-safety.md](references/asset-safety.md): dependency analysis, import changes, and material updates that touch many assets.

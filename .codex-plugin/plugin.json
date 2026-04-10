@@ -1,0 +1,23 @@
+{
+  "name": "unity-cli",
+  "version": "0.2.0",
+  "description": "Workflow-oriented Codex skills for Unity Editor automation via the Rust unity-cli.",
+  "author": {
+    "name": "akiojin",
+    "url": "https://github.com/akiojin"
+  },
+  "homepage": "https://github.com/akiojin/unity-cli",
+  "repository": "https://github.com/akiojin/unity-cli",
+  "license": "MIT",
+  "keywords": ["unity", "automation", "skills", "codex"],
+  "skills": "../.claude-plugin/plugins/unity-cli/skills/",
+  "interface": {
+    "displayName": "Unity CLI",
+    "shortDescription": "Unity Editor automation via unity-cli",
+    "longDescription": "Provides workflow-oriented skills for the Rust unity-cli, covering scene authoring, asset management, C# editing/navigation, prefab workflows, Editor control, Input System, Play Mode testing, UI automation, and Addressables. Skills are shared with the Claude Code plugin via a single source of truth.",
+    "developerName": "akiojin",
+    "category": "Productivity",
+    "capabilities": ["skills"],
+    "websiteURL": "https://github.com/akiojin/unity-cli"
+  }
+}

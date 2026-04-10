@@ -1,84 +1,67 @@
 ---
 name: unity-cli-usage
-description: Use unity-cli as the default interface for Unity Editor automation and local code tools. Use when the user asks how to verify the CLI, connect to Unity, switch active instances, choose between typed commands and raw tools, or troubleshoot unity-cli setup. Do not use once a more specific scene, asset, code, or testing skill clearly matches the task.
-allowed-tools: Bash, Read, Grep, Glob
+description: Bootstrap the unity-cli toolchain for Unity Editor automation. Use when verifying the unity-cli binary, choosing between typed subcommands and raw tool calls, switching active Unity instances, or troubleshooting host/port and install-mode issues. Do not use once a more specific Unity workflow skill applies; defer to `unity-scene-create`, `unity-csharp-edit`, `unity-editor-tools`, or another domain skill instead.
+allowed-tools: Bash(unity-cli:*), Read, Grep, Glob
+user-invocable: false
 metadata:
   author: akiojin
-  version: 0.2.0
+  version: 0.3.0
   category: foundation
+  triggers:
+    - bootstrap
+    - install
+    - connect
+    - ping
+    - instance
+  siblings:
+    - unity-scene-create
+    - unity-csharp-edit
+    - unity-editor-tools
 ---
 
 # unity-cli Usage
 
-Use `unity-cli` as the primary Unity automation interface.
-Read `references/runtime-checklist.md` when installation mode, instance selection, or CI environment details matter.
+Bootstrap the unity-cli toolchain so other Unity skills can run reliably. This is a foundation skill that loads automatically when no other unity-* skill matches a connection or install question.
 
 ## Use When
 
-- The user asks how to connect Claude Code to Unity through `unity-cli`.
-- The user needs help with `system ping`, `instances list`, `instances set-active`, or `--output json`.
-- The user asks whether to use a typed subcommand or `raw`.
-- The task is blocked on CLI setup, host/port selection, or connection troubleshooting.
+- The user asks how to verify or install `unity-cli`.
+- The user needs help with `system ping`, `instances list`, or `instances set-active`.
+- The user is unsure whether a typed subcommand or `raw` is appropriate.
+- A workflow is blocked on host/port selection, install mode, or connection troubleshooting.
 
 ## Do Not Use When
 
-- A more specific Unity workflow skill already covers the requested task.
-- The user only wants to inspect or edit project files without using `unity-cli`.
+- A more specific skill clearly matches the task. For scene authoring, use `unity-scene-create`. For C# edits, use `unity-csharp-edit`. For Editor state inspection, use `unity-editor-tools`.
+- The request only inspects or edits project files without invoking Unity.
 
-## Recommended Flow
+## Preferred Flow
 
-1. Verify whether `unity-cli` is available globally or must be run with `cargo run --`.
-2. Confirm the target Unity instance with `system ping` or `instances list`.
-3. Prefer typed subcommands such as `system`, `scene`, or `instances` when available.
-4. Fall back to `raw` only when there is no typed command for the needed tool.
-5. Use `--output json` for chained automation or when another tool will consume the result.
-
-## Bootstrap
+1. Detect the binary: prefer an installed `unity-cli` on `PATH`; fall back to `cargo run --` from the repo.
+2. Verify reachability with `unity-cli system ping`.
+3. When multiple editors may run, call `unity-cli instances list` and pick the target with `unity-cli instances set-active <host:port>`.
+4. Prefer typed subcommands (`system`, `scene`, `instances`); use `raw` only when no typed command exists.
+5. Use `--output json` for chained automation.
 
 ```bash
 if ! command -v unity-cli >/dev/null 2>&1; then
   if [ -f Cargo.toml ] && grep -q '^name = "unity-cli"' Cargo.toml; then
-    echo "unity-cli is not installed globally. Use: cargo run -- <args>"
+    echo "unity-cli not installed globally. Use: cargo run -- <args>"
   else
-    echo "unity-cli is not installed."
-    echo "Install a release binary from https://github.com/akiojin/unity-cli/releases"
-    echo "or clone the repo and run: cargo install --path ."
+    echo "Install: cargo install --path . (or download a release binary)"
     exit 1
   fi
 fi
-```
-
-Then verify:
-
-```bash
 unity-cli --version
-```
-
-## Preferred Order
-
-1. Use typed subcommands (`system`, `scene`, `instances`) when available.
-2. Use `raw` for the rest of Unity command types.
-3. Use `--output json` when chaining automation steps.
-
-## Commands
-
-```bash
 unity-cli system ping
-unity-cli scene create MainScene --path Assets/Scenes/
-unity-cli raw create_gameobject --json '{"name":"Player"}'
-unity-cli instances list --ports 6400,6401
-unity-cli instances set-active localhost:6401
 ```
 
 ## Examples
 
-- "Check whether `unity-cli` can reach my Unity Editor."
-- "Switch to the Unity instance running on port 6401."
-- "Tell me whether this workflow should use `scene create` or a raw tool call."
+- "Check whether unity-cli can reach my Unity Editor." → run `unity-cli system ping`.
+- "Switch to the Unity instance running on port 6401." → `unity-cli instances list --ports 6400,6401` then `unity-cli instances set-active localhost:6401`.
+- "Should this workflow use `scene create` or a raw tool call?" → prefer typed `unity-cli scene create` when one exists; otherwise hand off to `raw`.
 
-## Common Issues
+## References
 
-- `unity-cli` not found: use `cargo run -- <args>` from the repo root or install the release binary.
-- `instances set-active` returns `unreachable`: run `instances list` and select a target with `up` status.
-- CI or remote runs target the wrong editor: set `UNITY_CLI_HOST` and `UNITY_CLI_PORT` explicitly.
-- Raw payloads fail: make sure `--json` receives a valid JSON object, not shell-expanded fragments.
+- [runtime-checklist.md](references/runtime-checklist.md): binary selection, instance selection, command routing, CI environment notes.

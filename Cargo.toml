@@ -1,6 +1,6 @@
 [package]
 name = "unity-cli"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2021"
 description = "Rust CLI for Unity Editor automation over the Unity TCP protocol"
 readme = "README.md"
@@ -36,6 +36,7 @@ regex = "1.12"
 walkdir = "2.5"
 sha2 = "0.10"
 ureq = { version = "2.12", features = ["json"] }
+serde_yml = "0.0.12"
 
 [dev-dependencies]
 tempfile = "3.23"
