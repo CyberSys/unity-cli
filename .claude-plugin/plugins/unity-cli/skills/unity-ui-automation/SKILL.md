@@ -1,17 +1,25 @@
 ---
 name: unity-ui-automation
-description: Automate Unity UI inspection and interaction with unity-cli. Use when the user asks to find UI elements by name or type, inspect button or input state, click UI elements, set UI values, or run short UI interaction sequences during testing. Do not use for scene creation or general PlayMode control when UI-specific targeting is not needed.
-allowed-tools: Bash, Read, Grep, Glob
+description: Automate Unity UI inspection and interaction with unity-cli. Use when the user asks to find a UI element by name or type, inspect button or input state, click a UI element, set a UI value, or run a short UI interaction sequence during testing. Do not use for scene authoring or general play-mode control without UI targeting; use `unity-scene-create` or `unity-playmode-testing` instead.
+allowed-tools: Bash(unity-cli:*), Read, Grep, Glob
 metadata:
   author: akiojin
-  version: 0.2.0
+  version: 0.3.0
   category: ui
+  triggers:
+    - ui
+    - canvas
+    - button
+    - click
+    - input-field
+  siblings:
+    - unity-playmode-testing
+    - unity-scene-create
 ---
 
-# UI Element Automation
+# UI Automation
 
-Find, inspect, and interact with UI elements (uGUI / UI Toolkit).
-Read `references/ui-test-flow.md` when you need a safer locate-inspect-interact sequence for UI testing.
+Find, inspect, and interact with uGUI / UI Toolkit elements via `unity-cli`. This skill is the UI-focused complement to `unity-playmode-testing` (full runtime control).
 
 ## Use When
 
@@ -21,30 +29,21 @@ Read `references/ui-test-flow.md` when you need a safer locate-inspect-interact 
 
 ## Do Not Use When
 
-- The task is general PlayMode setup with no UI targeting requirement.
-- The request is about editing UI prefabs or scene hierarchy rather than testing interactions.
+- The task is general Play Mode setup with no UI targeting requirement; use `unity-playmode-testing`.
+- The request authors UI prefabs or scene hierarchy; use `unity-scene-create` or `unity-prefab-workflow`.
 
-## Recommended Flow
+## Preferred Flow
 
-1. Find the target UI element with `namePattern` or `elementType`.
-2. Inspect its current state before acting, especially for visibility and interactability.
-3. Perform one interaction at a time and re-check state when the sequence matters.
-4. Combine with PlayMode control only when the UI depends on runtime state.
-
-## Commands
+1. Find the target with `namePattern` or `elementType`.
+2. Inspect current state before acting (visibility, interactability).
+3. Perform one interaction at a time and re-check state when sequence matters.
+4. Combine with `unity-playmode-testing` only when the UI depends on runtime state.
 
 ```bash
-# Find UI elements
 unity-cli raw find_ui_elements --json '{"namePattern":"Start","includeInactive":true}'
-unity-cli raw find_ui_elements --json '{"elementType":"Button","includeInactive":true}'
-
-# Inspect state
 unity-cli raw get_ui_element_state --json '{"elementPath":"/Canvas/StartButton"}'
-
-# Interact
 unity-cli raw click_ui_element --json '{"elementPath":"/Canvas/StartButton"}'
 unity-cli raw set_ui_element_value --json '{"elementPath":"/Canvas/NameInput","value":"Player1"}'
-unity-cli raw simulate_ui_input --json '{"inputSequence":[{"type":"setvalue","params":{"elementPath":"/Canvas/Slider","value":"0.75"}}],"waitBetween":50}'
 ```
 
 ## Examples
@@ -53,9 +52,7 @@ unity-cli raw simulate_ui_input --json '{"inputSequence":[{"type":"setvalue","pa
 - "Read the current value of `/Canvas/NameInput` and then set it to `Player1`."
 - "Run a short slider interaction sequence in the active UI."
 
-## Common Issues
+## References
 
-- The element is not found: narrow with `namePattern` or `elementType`, and include inactive elements when needed.
-- The click has no effect: inspect `get_ui_element_state` first to verify visibility and interactability.
-- A longer runtime test is needed: combine with `unity-playmode-testing` for Play Mode control.
-- Use `simulate_ui_input` for compact repeated interactions rather than many one-off commands.
+- [runtime-checklist.md](references/runtime-checklist.md): connection and instance prerequisites.
+- [ui-test-flow.md](references/ui-test-flow.md): safer locate-inspect-interact sequence for UI testing.

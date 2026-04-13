@@ -147,7 +147,7 @@ namespace UnityCliBridge.Tests.PlayMode
         {
             for (int i = 0; i < timeoutFrames; i++)
             {
-                bool uguiReady = GameObject.Find("/Canvas/UGUI_Panel/UGUI_StatusText") != null;
+                bool uguiReady = FindSceneObject("Canvas/UGUI_Panel/UGUI_StatusText") != null;
                 bool uitkReady = IsOk(InvokeUIHandler("GetUIElementState", new JObject { ["elementPath"] = "uitk:/UITK/UIDocument#UITK_Status" }));
                 bool imguiReady = HasImguiControl("IMGUI/Button");
 
@@ -160,6 +160,21 @@ namespace UnityCliBridge.Tests.PlayMode
             }
 
             Assert.Fail("Timed out waiting for UI systems to be ready.");
+        }
+
+        private static GameObject FindSceneObject(string relativePath)
+        {
+            var canvas = GameObject.Find("Canvas");
+            if (canvas == null || string.IsNullOrEmpty(relativePath))
+            {
+                return null;
+            }
+
+            const string canvasPrefix = "Canvas/";
+            var trimmedPath = relativePath.StartsWith(canvasPrefix, StringComparison.Ordinal)
+                ? relativePath.Substring(canvasPrefix.Length)
+                : relativePath;
+            return canvas.transform.Find(trimmedPath)?.gameObject;
         }
 
         private static IEnumerator Click(string elementPath)

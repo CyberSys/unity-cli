@@ -542,7 +542,7 @@ namespace UnityCliBridge.Handlers
                         {
                             ["key"] = keyName
                         };
-                        SimulateKeyRelease(keyboard, releaseParams);
+                        SimulateKeyRelease(GetVirtualKeyboard(), releaseParams);
                     });
                 }
             }
@@ -663,7 +663,7 @@ namespace UnityCliBridge.Handlers
                         {
                             ["key"] = keyName
                         };
-                        SimulateKeyRelease(keyboard, releaseParams);
+                        SimulateKeyRelease(GetVirtualKeyboard(), releaseParams);
                     }
                 });
             }
@@ -787,7 +787,7 @@ namespace UnityCliBridge.Handlers
                         ["button"] = button,
                         ["buttonAction"] = "release"
                     };
-                    SimulateMouseButton(mouse, releaseParams);
+                    SimulateMouseButton(GetOrCreateDevice<Mouse>("mouse"), releaseParams);
                 });
             }
 
@@ -951,7 +951,7 @@ namespace UnityCliBridge.Handlers
                         ["button"] = buttonName,
                         ["buttonAction"] = "release"
                     };
-                    SimulateGamepadButton(gamepad, releaseParams);
+                    SimulateGamepadButton(GetOrCreateDevice<Gamepad>("gamepad"), releaseParams);
                 });
             }
             
@@ -999,7 +999,7 @@ namespace UnityCliBridge.Handlers
                         ["x"] = 0,
                         ["y"] = 0
                     };
-                    SimulateGamepadStick(gamepad, releaseParams);
+                    SimulateGamepadStick(GetOrCreateDevice<Gamepad>("gamepad"), releaseParams);
                 });
             }
 
@@ -1084,7 +1084,7 @@ namespace UnityCliBridge.Handlers
                         ["trigger"] = trigger,
                         ["value"] = 0f
                     };
-                    SimulateGamepadTrigger(gamepad, releaseParams);
+                    SimulateGamepadTrigger(GetOrCreateDevice<Gamepad>("gamepad"), releaseParams);
                 });
             }
             
@@ -1170,7 +1170,7 @@ namespace UnityCliBridge.Handlers
                     {
                         ["direction"] = "none"
                     };
-                    SimulateGamepadDPad(gamepad, releaseParams);
+                    SimulateGamepadDPad(GetOrCreateDevice<Gamepad>("gamepad"), releaseParams);
                 });
             }
             

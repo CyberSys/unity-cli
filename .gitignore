@@ -86,6 +86,7 @@ coverage/
 .nyc_output/
 tests/.reports/
 tests/.todo/
+tasks/todo.md
 
 # Build output
 dist/

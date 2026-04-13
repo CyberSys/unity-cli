@@ -280,7 +280,7 @@ CI is defined in `.github/workflows/lint.yml`, `.github/workflows/test.yml`, and
 
 | Job | Trigger | Description |
 | ----- | --------- | ------------- |
-| Skill Contract Check (required) | push / PR | `scripts/skill-eval/static-skill-contract-check.sh` |
+| Skill Contract Lint (required) | push / PR | `cargo run -- skills lint --severity error` (Skill Contract v1; SPEC #160) |
 | Rust Tests (required) | push / PR | `cargo test` |
 | LSP Tests (required) | push / PR | `dotnet test lsp/Server.Tests.csproj` |
 | LSP Performance (required) | push / PR | `scripts/lsp-perf-check.sh` (full cases + history artifact) |
@@ -347,14 +347,14 @@ Regression policy:
 
 Benchmark and history files:
 
-- `tests/fixtures/skill-routing/benchmark.jsonl` (routing benchmark: 120 cases)
+- `tests/fixtures/skill-routing/benchmark.jsonl` (routing benchmark: 127 cases)
 - `.unity/skill-eval/skill-routing-history.jsonl` (append-only eval history)
 - `.unity/skill-eval/skill-static-report.json` (latest static contract report)
 
 Run static validation (required in PR CI):
 
 ```bash
-./scripts/skill-eval/static-skill-contract-check.sh
+cargo run -- skills lint --severity error
 ```
 
 Run routing eval with predictions:
@@ -372,6 +372,16 @@ Run routing eval with an external runner command:
   --model nightly \
   --runner-cmd '<your-runner-command>'
 ```
+
+Run a local Codex-based routing check:
+
+```bash
+./scripts/skill-eval/llm-routing-eval.sh \
+  --model codex-local \
+  --runner-cmd 'python3 scripts/skill-eval/run-codex-routing.py'
+```
+
+This local runner requires `codex login` to be configured on the machine.
 
 Current thresholds:
 
@@ -711,7 +721,7 @@ CI は `.github/workflows/lint.yml` / `.github/workflows/test.yml` / `.github/wo
 
 | ジョブ | トリガー | 内容 |
 | -------- | --------- | ------ |
-| Skill Contract Check (required) | push / PR | `scripts/skill-eval/static-skill-contract-check.sh` |
+| Skill Contract Lint (required) | push / PR | `cargo run -- skills lint --severity error` (Skill Contract v1; SPEC #160) |
 | Rust Tests (required) | push / PR | `cargo test` |
 | LSP Tests (required) | push / PR | `dotnet test lsp/Server.Tests.csproj` |
 | LSP Performance (required) | push / PR | `scripts/lsp-perf-check.sh`（全ケース実行 + 履歴artifact） |
@@ -778,14 +788,14 @@ cat .unity/perf/lsp-history.jsonl | tail -n 5
 
 ベンチマーク・履歴ファイル:
 
-- `tests/fixtures/skill-routing/benchmark.jsonl`（ルーティング評価ベンチマーク: 120ケース）
+- `tests/fixtures/skill-routing/benchmark.jsonl`（ルーティング評価ベンチマーク: 127ケース）
 - `.unity/skill-eval/skill-routing-history.jsonl`（追記専用の評価履歴）
 - `.unity/skill-eval/skill-static-report.json`（最新の静的契約チェック結果）
 
 静的検証（PR CI 必須）:
 
 ```bash
-./scripts/skill-eval/static-skill-contract-check.sh
+cargo run -- skills lint --severity error
 ```
 
 予測JSONを使ったルーティング評価:
@@ -803,6 +813,16 @@ cat .unity/perf/lsp-history.jsonl | tail -n 5
   --model nightly \
   --runner-cmd '<your-runner-command>'
 ```
+
+ローカルの Codex runner を使ったルーティング評価:
+
+```bash
+./scripts/skill-eval/llm-routing-eval.sh \
+  --model codex-local \
+  --runner-cmd 'python3 scripts/skill-eval/run-codex-routing.py'
+```
+
+この local runner を使うには、事前に `codex login` が通っている必要があります。
 
 現在の閾値:
 
