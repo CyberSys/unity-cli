@@ -69,7 +69,11 @@ public class DiceController : MonoBehaviour
     private void CheckIfStopped()
     {
         // 速度と角速度が閾値以下になったら停止と判定
+#if UNITY_6000_0_OR_NEWER
         if (rb.linearVelocity.magnitude < stopThreshold && rb.angularVelocity.magnitude < stopThreshold)
+#else
+        if (rb.velocity.magnitude < stopThreshold && rb.angularVelocity.magnitude < stopThreshold)
+#endif
         {
             isRolling = false;
             DetermineUpwardFace();

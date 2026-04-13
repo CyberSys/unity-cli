@@ -72,7 +72,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.check-tag.outputs.created == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
@@ -263,7 +263,7 @@ jobs:
           generate_manifest "csharp-lsp" "csharp-lsp-manifest.json"
 
       - name: Upload assets to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.create-tag.outputs.tag }}
           files: |

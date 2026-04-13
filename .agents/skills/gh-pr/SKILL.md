@@ -60,7 +60,8 @@ When all PRs for the head branch are merged, you **must** check whether there ar
 | Summary | **YES** | 1-3 bullet points。"what" と "why" を両方含める |
 | Changes | **YES** | ファイル/モジュール単位で変更内容を列挙 |
 | Testing | **YES** | 実行したコマンドまたは手動テスト手順を具体的に記載 |
-| Related Issues / Links | **YES** | Issue番号、spec、または "None" を明記 |
+| Closing Issues | **YES** | `Closes #N` または `None` のみ。SPEC issue は禁止 |
+| Related Issues / Links | **YES** | 参照用の Issue番号、SPEC、または "None" を明記 |
 | Checklist | **YES** | 全項目を確認してチェック/N-A を付ける |
 | Context | Conditional | 3ファイル以上の変更、または非自明な変更理由がある場合は必須 |
 | Risk / Impact | Conditional | 破壊的変更・パフォーマンス影響・ロールバック手順がある場合は必須 |
@@ -75,8 +76,10 @@ When all PRs for the head branch are merged, you **must** check whether there ar
 3. Summary の各 bullet は **1文で完結** させる。曖昧な表現（"いくつかの変更", "various fixes"）を禁止する。
 4. Changes は **変更ファイルまたはモジュール名を含む** 具体的な記述にする。
 5. Testing は **再現可能な手順** を書く（"テスト済み" のような曖昧な記述を禁止）。
-6. Checklist の未チェック項目には理由コメントを付ける（例: `- [ ] Docs updated — N/A: no user-facing change`）。
-7. Related Issues は `#123` 形式または URL で記載する。該当なしの場合は "None" と明記する。
+6. Closing Issues は `Closes #123` または `None` のみを許可する。bare `#123` は禁止する。
+7. `gwt-spec` ラベル付き issue、またはタイトルが `gwt-spec:` で始まる issue は **SPEC issues must not appear in Closing Issues**。必ず `Related Issues / Links` に置く。
+8. Checklist の未チェック項目には理由コメントを付ける（例: `- [ ] Docs updated — N/A: no user-facing change`）。
+9. Related Issues は `#123` 形式または URL で記載する。該当なしの場合は "None" と明記する。
 
 ## Issue/PR Comment Formatting (must follow)
 
@@ -137,7 +140,7 @@ Next
    - Otherwise: `git push`
 
 7. **Collect PR inputs (for new PR or explicit update)**
-   - Title, Summary, Context, Changes, Testing, Risk/Impact, Deployment, Screenshots, Related Links, Notes
+   - Title, Summary, Context, Changes, Testing, Closing Issues, Risk/Impact, Deployment, Screenshots, Related Links, Notes
    - Optional: labels, reviewers, assignees, draft
 
 8. **Build PR body from template**
@@ -148,6 +151,7 @@ Next
   - **Conditional セクションが該当しない場合はセクションごと削除する。**
   - **テンプレート内の `<!-- GUIDE: ... -->` コメントは最終出力から削除する。**
   - **Required セクションに TODO が残っている場合は PR を作成せず、ユーザーに不足情報を確認する。**
+  - **Closing Issues は `Closes #N` か `None` のみを許可し、SPEC issue は `Related Issues / Links` にのみ記載する。**
 
 9. **Create or update the PR**
    - Create: `gh pr create -B <base> -H <head> --title "<title>" --body-file <file>`

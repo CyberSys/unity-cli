@@ -388,7 +388,11 @@ namespace UnityCliBridge.Handlers
                 },
                 ["velocityIterations"] = Physics2D.velocityIterations,
                 ["positionIterations"] = Physics2D.positionIterations,
+#if UNITY_6000_0_OR_NEWER
                 ["velocityThreshold"] = Physics2D.bounceThreshold,
+#else
+                ["velocityThreshold"] = Physics2D.velocityThreshold,
+#endif
                 ["maxLinearCorrection"] = Physics2D.maxLinearCorrection,
                 ["maxAngularCorrection"] = Physics2D.maxAngularCorrection,
                 ["maxTranslationSpeed"] = Physics2D.maxTranslationSpeed,

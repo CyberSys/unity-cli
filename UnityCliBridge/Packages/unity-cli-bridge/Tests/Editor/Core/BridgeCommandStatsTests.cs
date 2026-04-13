@@ -78,5 +78,11 @@ namespace UnityCliBridge.Tests.Editor.Core
             Assert.AreEqual(0, snapshot["counts"]?.Count());
             Assert.AreEqual(0, snapshot["timings"]?.Count());
         }
+
+        [Test]
+        public void CommandContext_IsExposedToFriendTestAssembly()
+        {
+            Assert.IsTrue(typeof(BridgeCommandStats.CommandContext).IsNestedAssembly);
+        }
     }
 }

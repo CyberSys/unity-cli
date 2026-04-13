@@ -1152,8 +1152,13 @@ namespace UnityCliBridge.Handlers
 
                 case Rigidbody rb:
                     properties["mass"] = rb.mass;
+#if UNITY_6000_0_OR_NEWER
                     properties["drag"] = rb.linearDamping;
                     properties["angularDrag"] = rb.angularDamping;
+#else
+                    properties["drag"] = rb.drag;
+                    properties["angularDrag"] = rb.angularDrag;
+#endif
                     properties["useGravity"] = rb.useGravity;
                     properties["isKinematic"] = rb.isKinematic;
                     break;
