@@ -139,6 +139,7 @@ git push origin develop
 ### 8. Closing Issue の収集
 
 `develop` 向けPRに書かれた `Closes #...` は自動クローズされないため、release PR（`develop -> main`）本文に再掲します。
+ただし、`gwt-spec` ラベル付き Issue やタイトルが `gwt-spec:` で始まる SPEC Issue は **クローズ対象に含めません**。
 
 まず、今回のリリース範囲を決定：
 
@@ -150,43 +151,28 @@ else
 fi
 ```
 
-次に、リリース範囲内のマージ済みPR本文とコミット本文から、closing keyword を使っている Issue 番号を抽出：
+次に、tracked helper を使って release PR 用の closing issue 行を生成：
 
 ```bash
-MERGED_PRS=$(git log --merges --pretty=%s "$RANGE" \
-  | sed -n 's/^Merge pull request #\([0-9]\+\).*$/\1/p' \
-  | sort -u)
-
-ISSUE_NUMBERS=""
-for PR_NUMBER in $MERGED_PRS; do
-  PR_BODY=$(gh pr view "$PR_NUMBER" --json body --jq '.body' 2>/dev/null || true)
-  if [ -n "$PR_BODY" ]; then
-    FOUND=$(printf '%s\n' "$PR_BODY" \
-      | grep -Ei '(close[sd]?|fix(e[sd])?|resolve[sd]?)' \
-      | grep -Eo '#[0-9]+' \
-      | tr -d '#' || true)
-    if [ -n "$FOUND" ]; then
-      ISSUE_NUMBERS="${ISSUE_NUMBERS}\n${FOUND}"
-    fi
-  fi
-done
-
-COMMIT_FOUND=$(git log --format=%B "$RANGE" \
-  | grep -Ei '(close[sd]?|fix(e[sd])?|resolve[sd]?)' \
-  | grep -Eo '#[0-9]+' \
-  | tr -d '#' || true)
-
-ISSUE_NUMBERS=$(printf '%b\n%s\n' "$ISSUE_NUMBERS" "$COMMIT_FOUND" \
-  | awk 'NF' \
-  | sort -nu)
+CLOSING_ISSUE_LINES="$(bash scripts/release/collect-closing-issues.sh --range "$RANGE")"
 ```
 
-`ISSUE_NUMBERS` が空でなければ、PR本文の `## Closing Issues` セクションに **1行ずつ** 以下を追加：
+この helper のルール:
+
+- 各 develop 向け PR の `## Closing Issues` セクションを最優先で採用
+- `## Closing Issues` が無い古い PR のみ、PR 本文全体の closing keyword (`Closes #...`, `Fixes #...`, `Resolves #...`) にフォールバック
+- リリース範囲のコミット本文にある closing keyword も加味
+- `## Related Issues / Links` にある bare `#123` は **参照専用** として扱い、auto-close 候補に昇格させない
+- `gwt-spec` ラベル付き Issue と `gwt-spec:` タイトルの SPEC Issue は除外
+
+`CLOSING_ISSUE_LINES` が `None` でなければ、PR本文の `## Closing Issues` セクションにそのまま挿入：
 
 ```text
 Closes #123
 Closes #456
 ```
+
+`CLOSING_ISSUE_LINES` が `None` の場合は、`## Closing Issues` に `None` と記載します。
 
 ### 9. PR作成/更新
 
@@ -229,9 +215,11 @@ PR bodyには以下を含めてください：
 - `## Summary` - このリリースの概要（変更内容を要約）
 - `## Changes` - 主な変更点をリスト形式で
 - `## Version` - バージョン番号
-- `## Closing Issues` - main マージ時にクローズしたい Issue を `Closes #<番号>` の生テキストで列挙（`ISSUE_NUMBERS` が空の場合は `None` と記載）
+- `## Closing Issues` - main マージ時にクローズしたい通常 Issue を `Closes #<番号>` の生テキストで列挙（`CLOSING_ISSUE_LINES` が `None` の場合は `None` と記載）
+- `## Related Issues / Links` - SPEC Issue や参照専用 Issue を列挙（ここに書かれた bare `#<番号>` は auto-close しない）
 
 **重要**: `Closes #<番号>` はコードブロックに入れず、通常の本文として記載すること。
+**重要**: SPEC Issue は `## Closing Issues` に入れず、`## Related Issues / Links` にのみ記載すること。
 
 ### 10. 完了メッセージ
 
