@@ -74,6 +74,10 @@ pub enum Command {
         #[command(subcommand)]
         command: UnitydCommand,
     },
+    Skills {
+        #[command(subcommand)]
+        command: SkillsCommand,
+    },
     Batch {
         #[arg(long, value_name = "JSON")]
         json: Option<String>,
@@ -179,4 +183,36 @@ pub enum UnitydCommand {
     Status,
     #[command(hide = true)]
     Serve,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+pub enum SkillSeverity {
+    #[default]
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+pub enum SkillFormat {
+    #[default]
+    Text,
+    Json,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SkillsCommand {
+    /// Validate Claude Code / Codex skill directories against Skill Contract v1.
+    Lint {
+        /// Skills root (default: auto-detect `.claude-plugin/plugins/unity-cli/skills`).
+        #[arg(long, value_name = "PATH")]
+        root: Option<PathBuf>,
+
+        /// Output format.
+        #[arg(long, value_enum, default_value_t = SkillFormat::Text)]
+        format: SkillFormat,
+
+        /// Severity gate; `error` exits non-zero on any violation.
+        #[arg(long, value_enum, default_value_t = SkillSeverity::Warning)]
+        severity: SkillSeverity,
+    },
 }

@@ -1,17 +1,25 @@
 ---
 name: unity-prefab-workflow
-description: Manage Unity prefab assets with unity-cli. Use when the user asks to create a prefab from a scene object, open a prefab in edit mode, save prefab changes, instantiate a prefab into a scene, or update prefab asset properties. Do not use for general scene object editing outside prefab workflows.
-allowed-tools: Bash, Read, Grep, Glob
+description: Manage Unity prefab assets with unity-cli. Use when the user asks to create a prefab from a scene object, open a prefab in edit mode, save prefab changes, instantiate a prefab, or update prefab asset properties. Do not use for general scene object editing; use `unity-gameobject-edit` or `unity-scene-create` instead.
+allowed-tools: Bash(unity-cli:*), Read, Grep, Glob
 metadata:
   author: akiojin
-  version: 0.2.0
+  version: 0.3.0
   category: prefabs
+  triggers:
+    - prefab
+    - instantiate
+    - edit-mode
+    - asset
+  siblings:
+    - unity-gameobject-edit
+    - unity-scene-create
+    - unity-asset-management
 ---
 
-# Prefab Lifecycle
+# Prefab Workflow
 
-Create, open, edit, and instantiate prefabs.
-Read `references/prefab-edit-mode.md` when you need a safe sequence for edit mode, scene handoff, or instantiation checks.
+Create, open, edit, and instantiate prefab assets via `unity-cli`. This skill owns the prefab edit-mode lifecycle; scene-instance edits belong to `unity-gameobject-edit`.
 
 ## Use When
 
@@ -21,43 +29,32 @@ Read `references/prefab-edit-mode.md` when you need a safe sequence for edit mod
 
 ## Do Not Use When
 
-- The request is about editing ordinary scene objects with no prefab asset involved.
-- The task is only about creating a scene from scratch.
+- The request edits ordinary scene objects with no prefab asset involved; use `unity-gameobject-edit`.
+- The task is bootstrapping a fresh scene; use `unity-scene-create`.
+- The request is about asset import settings or materials; use `unity-asset-management`.
 
-## Commands
+## Preferred Flow
+
+1. `open_prefab` to enter edit mode (or `create_prefab` from a scene object).
+2. Apply edits via `add_component`, `modify_component`, or `set_component_field`.
+3. `save_prefab` to persist changes back to the asset.
+4. `exit_prefab_mode` to return to scene authoring.
 
 ```bash
-# Create prefab from scene object
 unity-cli raw create_prefab --json '{"gameObjectPath":"/Player","prefabPath":"Assets/Prefabs/Player.prefab"}'
-
-# Prefab editing mode
 unity-cli raw open_prefab --json '{"prefabPath":"Assets/Prefabs/Player.prefab"}'
 unity-cli raw save_prefab --json '{}'
 unity-cli raw exit_prefab_mode --json '{}'
-
-# Instantiate
 unity-cli raw instantiate_prefab --json '{"prefabPath":"Assets/Prefabs/Player.prefab","position":{"x":0,"y":0,"z":0}}'
-
-# Modify prefab properties
-unity-cli raw modify_prefab --json '{"prefabPath":"Assets/Prefabs/Player.prefab","modifications":{"name":"UpdatedPlayer"}}'
 ```
-
-## Workflow
-
-1. `open_prefab` to enter edit mode
-2. Make changes (add components, modify properties)
-3. `save_prefab` to persist
-4. `exit_prefab_mode` to return to scene
 
 ## Examples
 
 - "Create a prefab from `/Player` and save it under `Assets/Prefabs/Player.prefab`."
-- "Open an existing prefab, change it, save it, and exit prefab mode."
+- "Open an existing prefab, change a field, save it, and exit prefab mode."
 - "Instantiate a prefab at the origin for a test scene."
 
-## Common Issues
+## References
 
-- Changes do not persist: call `save_prefab` before exiting edit mode.
-- The editor remains stuck in prefab mode: explicitly call `exit_prefab_mode` before switching scenes.
-- The user actually wants to edit a scene instance, not the prefab asset: switch to `unity-gameobject-edit`.
-- Use explicit `position` or `rotation` values during instantiation when placement matters.
+- [runtime-checklist.md](references/runtime-checklist.md): connection and instance prerequisites.
+- [prefab-edit-mode.md](references/prefab-edit-mode.md): safe sequence for edit mode, scene handoff, and instantiation checks.
