@@ -2,7 +2,7 @@
   PR Body Template — gh-pr skill
 
   Rules:
-  - REQUIRED sections: Summary, Changes, Testing, Related Issues, Checklist
+  - REQUIRED sections: Summary, Changes, Testing, Closing Issues, Related Issues, Checklist
   - CONDITIONAL sections: Context, Risk/Impact, Screenshots, Deployment
   - OPTIONAL sections: Notes
   - Remove CONDITIONAL sections entirely if not applicable
@@ -28,9 +28,19 @@
 
 - [ ] `{command}` — {expected result}
 
+## Closing Issues
+
+<!-- GUIDE: Issues to auto-close when this change is released to main.
+     Use "Closes #N" syntax (one per line). Write "None" if no issues to close.
+     SPEC issues must stay in Related Issues / Links and must never appear here.
+     Any issue listed only in Related Issues / Links is treated as reference-only. -->
+
+- Closes #{issue number}
+
 ## Related Issues / Links
 
-<!-- GUIDE: Use #number or full URL. Write "None" if no related issues. -->
+<!-- GUIDE: Use #number or full URL. Write "None" if no related issues.
+     SPEC issues belong here, not in Closing Issues. -->
 
 - {#issue or URL or "None"}
 
