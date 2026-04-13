@@ -53,7 +53,11 @@ namespace UnityCliBridge.Editor.UpmSigning
                 Debug.Log($"[upm-pack] output: {outputDirAbs}");
                 Debug.Log($"[upm-pack] org: {orgId}");
 
+#if UNITY_6000_0_OR_NEWER
                 packRequest = Client.Pack(packageDirAbs, outputDirAbs, orgId);
+#else
+                packRequest = Client.Pack(packageDirAbs, outputDirAbs);
+#endif
                 EditorApplication.update += PollPackRequest;
             }
             catch (Exception ex)
