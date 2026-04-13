@@ -11,7 +11,7 @@ namespace UnityCliBridge.Core
     /// </summary>
     public static class BridgeCommandStats
     {
-        private sealed class MetricAggregate
+        internal sealed class MetricAggregate
         {
             public int Count;
             public double TotalMs;
@@ -45,11 +45,11 @@ namespace UnityCliBridge.Core
             public double LastMs;
             public DateTime LastStartedAtUtc;
             public DateTime LastCompletedAtUtc;
-            public readonly Dictionary<string, MetricAggregate> Stages =
+            internal readonly Dictionary<string, MetricAggregate> Stages =
                 new Dictionary<string, MetricAggregate>(StringComparer.OrdinalIgnoreCase);
         }
 
-        private sealed class CommandContext
+        internal sealed class CommandContext
         {
             public CommandContext(string commandType, DateTime startedAtUtc)
             {
@@ -61,7 +61,7 @@ namespace UnityCliBridge.Core
             public string CommandType { get; }
             public DateTime StartedAtUtc { get; }
             public Stopwatch Stopwatch { get; }
-            public readonly Dictionary<string, MetricAggregate> Stages =
+            internal readonly Dictionary<string, MetricAggregate> Stages =
                 new Dictionary<string, MetricAggregate>(StringComparer.OrdinalIgnoreCase);
             public bool Completed { get; set; }
         }
