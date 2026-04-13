@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 TARGET_SCRIPT="${REPO_ROOT}/scripts/release/collect-closing-issues.sh"
-GH_PR_TEMPLATE="${REPO_ROOT}/.codex/skills/gh-pr/references/pr-body-template.md"
-GH_PR_SKILL="${REPO_ROOT}/.codex/skills/gh-pr/SKILL.md"
+GH_PR_TEMPLATE="${REPO_ROOT}/.agents/skills/gh-pr/references/pr-body-template.md"
+GH_PR_SKILL="${REPO_ROOT}/.agents/skills/gh-pr/SKILL.md"
 RELEASE_COMMAND="${REPO_ROOT}/.claude/commands/release.md"
 
 fail() {
