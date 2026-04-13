@@ -45,7 +45,7 @@ namespace UnityCliBridge.Core
             public double LastMs;
             public DateTime LastStartedAtUtc;
             public DateTime LastCompletedAtUtc;
-            public readonly Dictionary<string, MetricAggregate> Stages =
+            internal readonly Dictionary<string, MetricAggregate> Stages =
                 new Dictionary<string, MetricAggregate>(StringComparer.OrdinalIgnoreCase);
         }
 
@@ -61,7 +61,7 @@ namespace UnityCliBridge.Core
             public string CommandType { get; }
             public DateTime StartedAtUtc { get; }
             public Stopwatch Stopwatch { get; }
-            public readonly Dictionary<string, MetricAggregate> Stages =
+            internal readonly Dictionary<string, MetricAggregate> Stages =
                 new Dictionary<string, MetricAggregate>(StringComparer.OrdinalIgnoreCase);
             public bool Completed { get; set; }
         }
