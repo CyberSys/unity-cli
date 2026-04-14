@@ -1,4 +1,5 @@
 use std::fs;
+#[cfg(unix)]
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
@@ -55,5 +56,84 @@ impl DaemonRuntimePaths {
                 let _ = fs::remove_file(path);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::process::Command;
+
+    use tempfile::tempdir;
+
+    #[test]
+    fn runtime_module_builds_without_warnings_when_unix_code_is_disabled() {
+        let dir = tempdir().expect("tempdir should succeed");
+        let source_path = dir.path().join("runtime_windows_check.rs");
+        let runtime_path = format!("{}/src/daemon/runtime.rs", env!("CARGO_MANIFEST_DIR"));
+        let source = format!(
+            r##"#![allow(dead_code)]
+
+extern crate self as anyhow;
+pub type Result<T> = std::result::Result<T, std::io::Error>;
+
+mod core {{
+    pub mod runtime_paths {{
+        use std::path::PathBuf;
+
+        use crate::Result;
+
+        #[derive(Debug, Clone)]
+        pub struct RuntimePaths;
+
+        impl RuntimePaths {{
+            pub fn discover() -> Result<Self> {{
+                Ok(Self)
+            }}
+
+            pub fn daemon_dir(&self, name: &str) -> Result<PathBuf> {{
+                Ok(std::env::temp_dir().join(name))
+            }}
+        }}
+    }}
+}}
+
+mod daemon {{
+    pub mod runtime {{
+        include!(r#"{runtime_path}"#);
+    }}
+}}
+
+fn main() {{
+    let paths = daemon::runtime::DaemonRuntimePaths::new("unityd").expect("runtime paths");
+    let _ = paths.dir();
+    let _ = paths.pid_file();
+    paths.cleanup();
+}}
+"##
+        );
+        fs::write(&source_path, source).expect("fixture source should be written");
+
+        let output = Command::new("rustc")
+            .arg("--edition=2021")
+            .arg("--target")
+            .arg("x86_64-pc-windows-msvc")
+            .arg("-D")
+            .arg("warnings")
+            .arg("--emit=metadata")
+            .arg("--out-dir")
+            .arg(dir.path())
+            .arg("--crate-name")
+            .arg("runtime_windows_check")
+            .arg(&source_path)
+            .output()
+            .expect("rustc should run");
+
+        assert!(
+            output.status.success(),
+            "runtime.rs should compile cleanly when unix-only code is disabled\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
