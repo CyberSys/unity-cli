@@ -68,18 +68,27 @@ mod tests {
 
     #[test]
     fn runtime_module_builds_without_warnings_when_unix_code_is_disabled() {
-        // Skip if the Windows target is not installed (CI may not have it).
-        let target_check = Command::new("rustc")
-            .arg("--print=sysroot")
+        let dir = tempdir().expect("tempdir should succeed");
+
+        // Probe: try compiling a trivial file to check the target is usable.
+        let probe_path = dir.path().join("probe.rs");
+        fs::write(&probe_path, "fn main() {}").expect("write probe");
+        let probe = Command::new("rustc")
+            .arg("--edition=2021")
             .arg("--target")
             .arg("x86_64-pc-windows-msvc")
+            .arg("--emit=metadata")
+            .arg("--out-dir")
+            .arg(dir.path())
+            .arg("--crate-name")
+            .arg("target_probe")
+            .arg(&probe_path)
             .output();
-        if target_check.as_ref().map_or(true, |o| !o.status.success()) {
-            eprintln!("skipping: x86_64-pc-windows-msvc target not installed");
+        if probe.as_ref().map_or(true, |o| !o.status.success()) {
+            eprintln!("skipping: x86_64-pc-windows-msvc target not available");
             return;
         }
 
-        let dir = tempdir().expect("tempdir should succeed");
         let source_path = dir.path().join("runtime_windows_check.rs");
         let runtime_path = format!("{}/src/daemon/runtime.rs", env!("CARGO_MANIFEST_DIR"));
         let source = format!(
