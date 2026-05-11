@@ -61,12 +61,52 @@ pub fn compute_line_diff(before: &[String], after: &[String]) -> Vec<Hunk> {
     if before == after {
         return vec![];
     }
-    vec![Hunk {
-        before: before.to_vec(),
-        after: after.to_vec(),
-        before_start: 1,
-        after_start: 1,
-    }]
+    let before_refs: Vec<&str> = before.iter().map(|s| s.as_str()).collect();
+    let after_refs: Vec<&str> = after.iter().map(|s| s.as_str()).collect();
+    let diff = similar::TextDiff::from_slices(&before_refs, &after_refs);
+    let mut hunks: Vec<Hunk> = Vec::new();
+    let mut current: Option<(Vec<String>, Vec<String>, u32, u32)> = None;
+    let mut before_line = 1u32;
+    let mut after_line = 1u32;
+
+    for change in diff.iter_all_changes() {
+        let value = change.value().to_string();
+        match change.tag() {
+            similar::ChangeTag::Equal => {
+                if let Some((b, a, bs, as_)) = current.take() {
+                    hunks.push(Hunk {
+                        before: b,
+                        after: a,
+                        before_start: bs,
+                        after_start: as_,
+                    });
+                }
+                before_line += 1;
+                after_line += 1;
+            }
+            similar::ChangeTag::Delete => {
+                let entry = current
+                    .get_or_insert_with(|| (Vec::new(), Vec::new(), before_line, after_line));
+                entry.0.push(value);
+                before_line += 1;
+            }
+            similar::ChangeTag::Insert => {
+                let entry = current
+                    .get_or_insert_with(|| (Vec::new(), Vec::new(), before_line, after_line));
+                entry.1.push(value);
+                after_line += 1;
+            }
+        }
+    }
+    if let Some((b, a, bs, as_)) = current.take() {
+        hunks.push(Hunk {
+            before: b,
+            after: a,
+            before_start: bs,
+            after_start: as_,
+        });
+    }
+    hunks
 }
 
 pub fn compute_symbol_diff(
@@ -282,15 +322,66 @@ mod tests {
     }
 
     #[test]
-    fn compute_line_diff_produces_single_hunk_for_changes() {
+    fn compute_line_diff_replacement_isolates_changed_lines() {
         let before = vec!["a".to_string(), "b".to_string()];
         let after = vec!["a".to_string(), "c".to_string()];
         let hunks = compute_line_diff(&before, &after);
         assert_eq!(hunks.len(), 1);
-        assert_eq!(hunks[0].before, before);
-        assert_eq!(hunks[0].after, after);
-        assert_eq!(hunks[0].before_start, 1);
-        assert_eq!(hunks[0].after_start, 1);
+        assert_eq!(hunks[0].before, vec!["b".to_string()]);
+        assert_eq!(hunks[0].after, vec!["c".to_string()]);
+        assert_eq!(hunks[0].before_start, 2);
+        assert_eq!(hunks[0].after_start, 2);
+    }
+
+    #[test]
+    fn compute_line_diff_for_inserts_only_returns_addition_hunk() {
+        let before = vec!["a".to_string(), "b".to_string()];
+        let after = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let hunks = compute_line_diff(&before, &after);
+        assert_eq!(hunks.len(), 1);
+        assert!(hunks[0].before.is_empty());
+        assert_eq!(hunks[0].after, vec!["c".to_string()]);
+        assert_eq!(hunks[0].after_start, 3);
+        assert_eq!(hunks[0].before_start, 3);
+    }
+
+    #[test]
+    fn compute_line_diff_for_deletes_only_returns_removal_hunk() {
+        let before = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let after = vec!["a".to_string(), "c".to_string()];
+        let hunks = compute_line_diff(&before, &after);
+        assert_eq!(hunks.len(), 1);
+        assert_eq!(hunks[0].before, vec!["b".to_string()]);
+        assert!(hunks[0].after.is_empty());
+        assert_eq!(hunks[0].before_start, 2);
+        assert_eq!(hunks[0].after_start, 2);
+    }
+
+    #[test]
+    fn compute_line_diff_for_separate_changes_produces_multiple_hunks() {
+        let before = vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+            "e".to_string(),
+        ];
+        let after = vec![
+            "X".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+            "Y".to_string(),
+        ];
+        let hunks = compute_line_diff(&before, &after);
+        assert!(
+            hunks.len() >= 2,
+            "expected at least 2 hunks for two separate changes: {hunks:?}"
+        );
+        // First hunk: a -> X at line 1
+        assert_eq!(hunks.first().unwrap().before_start, 1);
+        // Last hunk: e -> Y at line 5
+        assert_eq!(hunks.last().unwrap().before_start, 5);
     }
 
     #[test]

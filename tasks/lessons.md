@@ -44,3 +44,10 @@
 - Mistake: section 構造が必要であることを起票時に意識せず、`gwt-build-spec` の completion gate で tasks セクション更新ができなくなった。
 - Rule: SPEC を起票するときは body 内に `## Spec` / `## Plan` / `## Tasks` / `## TDD` の見出しを揃え、必要なら `gwtd issue spec --edit <section>` を初回投入時から使う。`--edit` 経由なら gwtd 側が `<!-- sections: ... -->` コメントを管理してくれる。
 - Checkpoint: 1. spec create 直後に `gwtd issue spec <n>` を実行して `<!-- sections: -->` が埋まっているか確認 2. 空ならその場で `--edit spec` / `--edit plan` / `--edit tasks` / `--edit tdd` で投入し直す
+
+### 2026-05-12 (子 SPEC 増殖の防止)
+
+- Context: Phase 4 umbrella SPEC #191 を起票した直後、最優先サブタスクを「子 SPEC #192」として切り出してしまい、user から「基本的には子 SPEC は作らないでください」と明示指示を受けた。
+- Mistake: ralph loop / autonomous 進行時に、umbrella SPEC があってもサブタスクごとに新 SPEC を生やす癖が出た。Phase 1-3 の「Phase ごとに 1 SPEC」パターンを引きずって過剰に細分化した。
+- Rule: umbrella SPEC が存在する Phase では、サブタスクで独立した SPEC を新設しない。実装は umbrella SPEC を `Refs` する commit / PR で進め、umbrella SPEC 本文の Tasks セクションをチェックボックスで更新する。新 SPEC を起こすのは umbrella の意図と明確に外れる別軸の作業に限定する。
+- Checkpoint: 1. 新規 SPEC 起票前に「既存の umbrella SPEC で受け止められないか」を 1 度自問する 2. 起票する場合は umbrella との関係（吸収 / 並列 / 独立）を本文の `Related` で明示する
