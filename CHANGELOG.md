@@ -1,3 +1,48 @@
+## [0.11.0] - 2026-05-12
+
+### 🚀 Features
+
+- *(reference)* UnityCsReference のローカルキャッシュ参照機構（Phase 1）
+- *(reference)* Phase 2 - reference find-symbol と Phase 1 振り返り
+- *(reference)* Phase 3 - reference diff と resolve-symbol-at（SPEC #188）
+- *(reference)* Member-level シンボル抽出 MVP（Phase 4-A）
+- *(reference)* Compute_line_diff を LCS / Myers 化（Phase 4-B）
+- *(reference)* Extract_token_at_cursor を C# lexer 化（Phase 4-C）
+- *(reference)* Reference fetch に zip fallback を追加（Phase 4-D）
+- *(reference)* Vector embedding 検索 MVP（Phase 4-E）
+
+### 🐛 Bug Fixes
+
+- *(ci)* Upgrade to pnpm 10 for action-setup v6 compatibility
+- *(ci)* Revert pnpm/action-setup to v5 for lockfile compatibility
+- *(daemon)* Skip cross-compilation test when target is unavailable
+- *(daemon)* Suppress unused import warning on Windows builds
+- *(daemon)* Use compile probe to detect Windows target availability
+- *(reference)* CI clippy 1.95 warnings と coverage gate を解消
+- *(reference)* Clippy 1.95 useless-conversion を解消（Phase 4-E）
+- *(release)* Guard closing issue collection
+- *(runner)* Clippy 1.95 警告を解消（unused tool var と await_holding_lock attr 位置）
+- *(unity-cli-bridge)* Align BridgeCommandStats accessibility
+- Guard Unity 2022 editor scripts
+- Guard Unity 2022.3 API differences
+
+### 🎨 Styling
+
+- *(daemon)* Apply rustfmt to cross-compilation test
+
+### 🧪 Testing
+
+- *(coverage)* Reference 系 / self_update / managed_binaries に追加テストを投入
+- *(release)* Follow agents gh-pr paths
+
+### ⚙️ Miscellaneous Tasks
+
+- *(reference)* Test 残骸の .unity-cli-index/ を gitignore へ
+- Add Unity 2022/6 manifest switch
+- Apply cargo fmt to test imports and assert_eq formatting
+- Ignore tests/fixtures/**/.unity-cli-index/
+- Remove legacy hook scripts and hooks config from settings.json
+
 ## [0.10.0] - 2026-04-10
 
 ### 🚀 Features
