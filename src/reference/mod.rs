@@ -319,4 +319,207 @@ mod tests {
         assert_eq!(versions[0]["version"], "2023.2.20f1");
         let _ = std::fs::remove_dir_all(&root);
     }
+
+    #[test]
+    fn resolve_version_uses_explicit_param() {
+        let v = resolve_version(&json!({"version": "2023.2.20f1"})).unwrap();
+        assert_eq!(v, "2023.2.20f1");
+    }
+
+    #[test]
+    fn resolve_version_falls_back_to_project_detection() {
+        let tmp = unique_temp_path("resolve-version");
+        let settings = tmp.join("ProjectSettings");
+        std::fs::create_dir_all(&settings).unwrap();
+        std::fs::write(
+            settings.join("ProjectVersion.txt"),
+            "m_EditorVersion: 2023.2.20f1\n",
+        )
+        .unwrap();
+        let v = resolve_version(&json!({"projectRoot": tmp.to_str().unwrap()})).unwrap();
+        assert_eq!(v, "2023.2.20f1");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn resolve_version_and_branch_uses_explicit_overrides() {
+        let (v, b) = resolve_version_and_branch(
+            &json!({"version": "2025.1.0f1", "branch": "custom/branch"}),
+        )
+        .unwrap();
+        assert_eq!(v, "2025.1.0f1");
+        assert_eq!(b, "custom/branch");
+    }
+
+    #[test]
+    fn resolve_version_and_branch_detects_from_project_when_missing() {
+        let tmp = unique_temp_path("resolve-vb");
+        let settings = tmp.join("ProjectSettings");
+        std::fs::create_dir_all(&settings).unwrap();
+        std::fs::write(
+            settings.join("ProjectVersion.txt"),
+            "m_EditorVersion: 2023.2.20f1\n",
+        )
+        .unwrap();
+        let (v, b) =
+            resolve_version_and_branch(&json!({"projectRoot": tmp.to_str().unwrap()})).unwrap();
+        assert_eq!(v, "2023.2.20f1");
+        assert_eq!(b, "2023.2/staging");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn now_unix_seconds_string_is_decimal() {
+        let s = now_unix_seconds_string();
+        assert!(!s.is_empty());
+        assert!(s.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn dir_size_empty_returns_zero() {
+        let tmp = unique_temp_path("dirsize-empty");
+        std::fs::create_dir_all(&tmp).unwrap();
+        assert_eq!(dir_size(&tmp).unwrap(), 0);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn dir_size_sums_file_lengths() {
+        let tmp = unique_temp_path("dirsize-files");
+        let sub = tmp.join("a");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(tmp.join("a.txt"), b"hello").unwrap();
+        std::fs::write(sub.join("b.txt"), b"world!!").unwrap();
+        assert_eq!(dir_size(&tmp).unwrap(), 5 + 7);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(dst)?;
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            if file_type.is_dir() {
+                copy_dir_recursive(&src_path, &dst_path)?;
+            } else if file_type.is_file() {
+                std::fs::copy(&src_path, &dst_path)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn setup_cache_with_fixture(label: &str) -> (PathBuf, &'static str) {
+        let root = unique_temp_path(label);
+        let version = "fixture-version";
+        let dest = root.join("UnityCsReference").join(version);
+        let fixture =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reference-cache");
+        copy_dir_recursive(&fixture, &dest).unwrap();
+        (root, version)
+    }
+
+    #[test]
+    fn execute_grep_via_dispatcher_returns_hits() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("grep-disp");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_grep",
+            &json!({"pattern": "class Animator", "version": version}),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(value["ok"], true);
+        let hits = value["hits"].as_array().unwrap();
+        assert!(!hits.is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_view_via_dispatcher_returns_lines() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("view-disp");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_view",
+            &json!({
+                "path": "Runtime/Export/Animation/Animator.bindings.cs",
+                "version": version,
+                "startLine": 1,
+                "maxLines": 3,
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["view"]["lines"].as_array().unwrap().len(), 3);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_search_via_dispatcher_truncates_max_results() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("search-disp");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_search",
+            &json!({
+                "pattern": "class",
+                "version": version,
+                "maxResults": 1,
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["hits"].as_array().unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_status_includes_size_bytes() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("status-size");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool("reference_status", &json!({}))
+            .unwrap()
+            .unwrap();
+        let versions = value["versions"].as_array().unwrap();
+        assert_eq!(versions.len(), 1);
+        assert_eq!(versions[0]["version"], version);
+        assert!(versions[0]["sizeBytes"].as_u64().unwrap() > 0);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_fetch_skips_when_destination_exists_without_force() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("fetch-skip");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_fetch",
+            &json!({
+                "version": version,
+                "branch": "fixture/branch",
+                "acceptLicense": true,
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["skipped"], true);
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

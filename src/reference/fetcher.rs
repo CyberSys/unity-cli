@@ -161,4 +161,42 @@ mod tests {
         let _env = EnvVarGuard::set("UNITY_CLI_ACCEPT_LICENSE", "1");
         require_license_accepted(false).expect("license OK when env set");
     }
+
+    #[test]
+    fn license_rejects_zero_value() {
+        let _guard = env_lock().lock().unwrap_or_else(|p| p.into_inner());
+        let _env = EnvVarGuard::set("UNITY_CLI_ACCEPT_LICENSE", "0");
+        let err = require_license_accepted(false).unwrap_err();
+        assert!(format!("{err:#}").contains("Unity Companion License"));
+    }
+
+    #[test]
+    fn github_token_returns_none_when_env_unset() {
+        let _guard = env_lock().lock().unwrap_or_else(|p| p.into_inner());
+        let _g1 = EnvVarGuard::unset("GITHUB_TOKEN");
+        let _g2 = EnvVarGuard::unset("GH_TOKEN");
+        assert!(github_token().is_none());
+    }
+
+    #[test]
+    fn github_token_skips_empty_and_picks_first_non_empty() {
+        let _guard = env_lock().lock().unwrap_or_else(|p| p.into_inner());
+        let _g1 = EnvVarGuard::set("GITHUB_TOKEN", "");
+        let _g2 = EnvVarGuard::set("GH_TOKEN", "ghp_test_value");
+        assert_eq!(github_token().as_deref(), Some("ghp_test_value"));
+    }
+
+    #[test]
+    fn ensure_git_available_succeeds_in_test_env() {
+        ensure_git_available().expect("git is expected on dev/CI environment");
+    }
+
+    #[test]
+    fn run_clone_rejects_when_license_not_accepted() {
+        let _guard = env_lock().lock().unwrap_or_else(|p| p.into_inner());
+        let _env = EnvVarGuard::unset("UNITY_CLI_ACCEPT_LICENSE");
+        let dest = PathBuf::from("/tmp/unity-cli-reference-clone-license-guard");
+        let err = run_clone(UNITY_CS_REFERENCE_URL, "2023.2/staging", &dest, 1, false).unwrap_err();
+        assert!(format!("{err:#}").contains("Unity Companion License"));
+    }
 }

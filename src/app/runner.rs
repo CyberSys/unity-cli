@@ -559,15 +559,11 @@ fn validate_value_against_schema(value: &Value, schema: &Value, path: &str) -> R
         match expected_type {
             "object" => validate_object(value, schema, path)?,
             "array" => validate_array(value, schema, path)?,
-            "string" => {
-                if !value.is_string() {
-                    return Err(anyhow!("{path} must be a string"));
-                }
+            "string" if !value.is_string() => {
+                return Err(anyhow!("{path} must be a string"));
             }
-            "boolean" => {
-                if !value.is_boolean() {
-                    return Err(anyhow!("{path} must be a boolean"));
-                }
+            "boolean" if !value.is_boolean() => {
+                return Err(anyhow!("{path} must be a boolean"));
             }
             "integer" => {
                 let is_integer = value.as_i64().is_some()
@@ -577,10 +573,8 @@ fn validate_value_against_schema(value: &Value, schema: &Value, path: &str) -> R
                     return Err(anyhow!("{path} must be an integer"));
                 }
             }
-            "number" => {
-                if value.as_f64().is_none() {
-                    return Err(anyhow!("{path} must be a number"));
-                }
+            "number" if value.as_f64().is_none() => {
+                return Err(anyhow!("{path} must be a number"));
             }
             _ => {}
         }

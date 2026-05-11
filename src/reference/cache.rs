@@ -86,7 +86,7 @@ pub fn gc(keep: usize, dry_run: bool) -> Result<Vec<PathBuf>> {
         let mtime = meta.modified()?;
         entries.push((entry.path(), mtime));
     }
-    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     let removed: Vec<PathBuf> = entries.into_iter().skip(keep).map(|(p, _)| p).collect();
     if !dry_run {
         for path in &removed {
