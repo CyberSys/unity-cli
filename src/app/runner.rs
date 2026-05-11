@@ -912,9 +912,8 @@ fn init_tracing(verbose: u8) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_reference_call, execute_tool, init_tracing, load_params,
-        parse_external_tool_command, parse_json_object, parse_ports, print_value, run_with_cli,
-        validate_tool_params,
+        build_reference_call, execute_tool, init_tracing, load_params, parse_external_tool_command,
+        parse_json_object, parse_ports, print_value, run_with_cli, validate_tool_params,
     };
     use crate::cli::{
         Cli, Command, InstancesCommand, LspdCommand, OutputFormat, RawArgs, ReferenceCommand,
@@ -2108,7 +2107,10 @@ mod tests {
         };
         let (tool, params) = build_reference_call(&cmd);
         assert_eq!(tool, "reference_view");
-        assert_eq!(params["path"], "Runtime/Export/Animation/Animator.bindings.cs");
+        assert_eq!(
+            params["path"],
+            "Runtime/Export/Animation/Animator.bindings.cs"
+        );
         assert_eq!(params["startLine"], 100);
         assert_eq!(params["maxLines"], 60);
     }
