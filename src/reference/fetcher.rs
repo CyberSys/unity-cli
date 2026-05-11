@@ -1,4 +1,6 @@
-use std::path::Path;
+use std::fs;
+use std::io::{Cursor, Read};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{anyhow, Context, Result};
@@ -62,7 +64,14 @@ pub fn run_clone(
     accept_license: bool,
 ) -> Result<()> {
     require_license_accepted(accept_license)?;
-    ensure_git_available()?;
+    if ensure_git_available().is_ok() {
+        return run_clone_via_git(url, branch, dest, depth);
+    }
+    // git binary unavailable: fall back to archive download.
+    fetch_via_zip(branch, dest)
+}
+
+fn run_clone_via_git(url: &str, branch: &str, dest: &Path, depth: u32) -> Result<()> {
     let mut cmd = Command::new("git");
     if let Some(token) = github_token() {
         cmd.arg("-c")
@@ -79,6 +88,91 @@ pub fn run_clone(
         return Err(anyhow!("git clone exited with status {status}"));
     }
     Ok(())
+}
+
+/// Branch -> GitHub archive zip URL.
+pub fn archive_url_for_branch(branch: &str) -> String {
+    format!(
+        "https://github.com/Unity-Technologies/UnityCsReference/archive/refs/heads/{branch}.zip"
+    )
+}
+
+pub fn fetch_via_zip(branch: &str, dest: &Path) -> Result<()> {
+    let url = archive_url_for_branch(branch);
+    let agent = ureq::Agent::new_with_defaults();
+    let mut request = agent.get(&url);
+    if let Some(token) = github_token() {
+        request = request.header("Authorization", format!("token {token}"));
+    }
+    let response = request
+        .call()
+        .with_context(|| format!("failed to GET {url}"))?;
+    let mut body = response.into_body();
+    let mut buffer = Vec::new();
+    body.as_reader()
+        .read_to_end(&mut buffer)
+        .with_context(|| format!("failed to read archive body for {url}"))?;
+    extract_zip_to(&buffer, dest)
+}
+
+pub fn extract_zip_to(archive_bytes: &[u8], dest: &Path) -> Result<()> {
+    fs::create_dir_all(dest)
+        .with_context(|| format!("failed to create destination {}", dest.display()))?;
+    let cursor = Cursor::new(archive_bytes);
+    let mut archive =
+        zip::ZipArchive::new(cursor).context("failed to open zip archive from buffer")?;
+    let prefix = detect_top_level_prefix(&mut archive)?;
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .with_context(|| format!("failed to read zip entry {i}"))?;
+        let raw_name = file.name().to_string();
+        let stripped = match strip_prefix(&raw_name, &prefix) {
+            Some(s) if !s.is_empty() => s.to_string(),
+            _ => continue,
+        };
+        if stripped.contains("..") {
+            return Err(anyhow!(
+                "zip entry escapes destination via parent segments: {raw_name}"
+            ));
+        }
+        let target_path: PathBuf = dest.join(&stripped);
+        if raw_name.ends_with('/') {
+            fs::create_dir_all(&target_path)
+                .with_context(|| format!("failed to create directory {}", target_path.display()))?;
+            continue;
+        }
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create parent {}", parent.display()))?;
+        }
+        let mut out = fs::File::create(&target_path)
+            .with_context(|| format!("failed to open {} for writing", target_path.display()))?;
+        std::io::copy(&mut file, &mut out)
+            .with_context(|| format!("failed to write {}", target_path.display()))?;
+    }
+    Ok(())
+}
+
+fn detect_top_level_prefix(archive: &mut zip::ZipArchive<Cursor<&[u8]>>) -> Result<String> {
+    if archive.is_empty() {
+        return Err(anyhow!("zip archive is empty"));
+    }
+    let first = archive.by_index(0).context("zip archive has no entries")?;
+    let name = first.name();
+    if let Some(idx) = name.find('/') {
+        Ok(name[..=idx].to_string())
+    } else {
+        Ok(String::new())
+    }
+}
+
+fn strip_prefix<'a>(name: &'a str, prefix: &str) -> Option<&'a str> {
+    if prefix.is_empty() {
+        Some(name)
+    } else {
+        name.strip_prefix(prefix)
+    }
 }
 
 #[cfg(test)]
@@ -198,5 +292,68 @@ mod tests {
         let dest = PathBuf::from("/tmp/unity-cli-reference-clone-license-guard");
         let err = run_clone(UNITY_CS_REFERENCE_URL, "2023.2/staging", &dest, 1, false).unwrap_err();
         assert!(format!("{err:#}").contains("Unity Companion License"));
+    }
+
+    #[test]
+    fn archive_url_uses_unity_cs_reference_org() {
+        let url = archive_url_for_branch("2023.2/staging");
+        assert!(url.starts_with(
+            "https://github.com/Unity-Technologies/UnityCsReference/archive/refs/heads/"
+        ));
+        assert!(url.ends_with("/2023.2/staging.zip"));
+    }
+
+    fn build_sample_zip() -> Vec<u8> {
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+        let mut buf = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let options =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            writer
+                .start_file("UnityCsReference-fixture/Editor/Foo.cs", options)
+                .unwrap();
+            writer.write_all(b"public class Foo {}\n").unwrap();
+            writer
+                .start_file("UnityCsReference-fixture/Runtime/Bar/Bar.cs", options)
+                .unwrap();
+            writer.write_all(b"public class Bar {}\n").unwrap();
+            writer.finish().unwrap();
+        }
+        buf
+    }
+
+    #[test]
+    fn extract_zip_to_strips_top_level_prefix_and_writes_files() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let buf = build_sample_zip();
+        extract_zip_to(&buf, tmp.path()).unwrap();
+        let foo = tmp.path().join("Editor/Foo.cs");
+        let bar = tmp.path().join("Runtime/Bar/Bar.cs");
+        assert!(foo.exists(), "Editor/Foo.cs should exist");
+        assert!(bar.exists(), "Runtime/Bar/Bar.cs should exist");
+        let contents = std::fs::read_to_string(&foo).unwrap();
+        assert!(contents.contains("class Foo"));
+    }
+
+    #[test]
+    fn extract_zip_to_rejects_entries_with_parent_segments() {
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+        let mut buf = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let options =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            writer
+                .start_file("UnityCsReference-fixture/../escape.cs", options)
+                .unwrap();
+            writer.write_all(b"bad").unwrap();
+            writer.finish().unwrap();
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let err = extract_zip_to(&buf, tmp.path()).unwrap_err();
+        assert!(format!("{err:#}").contains(".."));
     }
 }
