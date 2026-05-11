@@ -120,6 +120,17 @@ pub const TOOL_NAMES: &[&str] = &[
     "capture_video_start",
     "capture_video_status",
     "capture_video_stop",
+    "reference_fetch",
+    "reference_status",
+    "reference_search",
+    "reference_grep",
+    "reference_view",
+    "reference_clean",
+    "reference_find_symbol",
+    "reference_diff",
+    "reference_resolve_symbol_at",
+    "reference_embed_build",
+    "reference_embed_search",
 ];
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -216,7 +227,18 @@ fn tool_executor(name: &str) -> ToolExecutor {
         | "write_csharp_file"
         | "create_csharp_file"
         | "apply_csharp_edits"
-        | "create_class" => ToolExecutor::Local,
+        | "create_class"
+        | "reference_fetch"
+        | "reference_status"
+        | "reference_search"
+        | "reference_grep"
+        | "reference_view"
+        | "reference_clean"
+        | "reference_find_symbol"
+        | "reference_diff"
+        | "reference_resolve_symbol_at"
+        | "reference_embed_build"
+        | "reference_embed_search" => ToolExecutor::Local,
         _ => ToolExecutor::Remote,
     }
 }
@@ -264,6 +286,14 @@ fn is_read_only_tool(name: &str) -> bool {
             | "find_ui_elements"
             | "get_ui_element_state"
             | "capture_video_status"
+            | "reference_status"
+            | "reference_search"
+            | "reference_grep"
+            | "reference_view"
+            | "reference_find_symbol"
+            | "reference_diff"
+            | "reference_resolve_symbol_at"
+            | "reference_embed_search"
     )
 }
 
@@ -2220,6 +2250,113 @@ fn tool_params_schema(name: &str) -> Value {
             &[],
             false,
         ),
+        "reference_fetch" => object_schema(
+            &[
+                ("version", string_schema()),
+                ("branch", string_schema()),
+                ("force", boolean_schema()),
+                ("acceptLicense", boolean_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &[],
+            false,
+        ),
+        "reference_status" => object_schema(&[("version", string_schema())], &[], false),
+        "reference_search" => object_schema(
+            &[
+                ("pattern", string_schema()),
+                ("version", string_schema()),
+                ("path", string_schema()),
+                ("maxResults", integer_schema()),
+                ("regex", boolean_schema()),
+                ("context", integer_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &["pattern"],
+            false,
+        ),
+        "reference_grep" => object_schema(
+            &[
+                ("pattern", string_schema()),
+                ("version", string_schema()),
+                ("fileGlob", string_schema()),
+                ("context", integer_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &["pattern"],
+            false,
+        ),
+        "reference_view" => object_schema(
+            &[
+                ("path", string_schema()),
+                ("version", string_schema()),
+                ("startLine", integer_schema()),
+                ("maxLines", integer_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &["path"],
+            false,
+        ),
+        "reference_clean" => object_schema(
+            &[
+                ("keep", integer_schema()),
+                ("version", string_schema()),
+                ("dryRun", boolean_schema()),
+            ],
+            &[],
+            false,
+        ),
+        "reference_find_symbol" => object_schema(
+            &[
+                ("name", string_schema()),
+                ("kind", string_schema()),
+                ("namespace", string_schema()),
+                ("version", string_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &["name"],
+            false,
+        ),
+        "reference_diff" => object_schema(
+            &[
+                ("from", string_schema()),
+                ("to", string_schema()),
+                ("symbol", string_schema()),
+                ("path", string_schema()),
+                ("maxSymbols", integer_schema()),
+            ],
+            &["from", "to"],
+            false,
+        ),
+        "reference_resolve_symbol_at" => object_schema(
+            &[
+                ("path", string_schema()),
+                ("line", integer_schema()),
+                ("column", integer_schema()),
+                ("version", string_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &["path", "line", "column"],
+            false,
+        ),
+        "reference_embed_build" => object_schema(
+            &[
+                ("version", string_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &[],
+            false,
+        ),
+        "reference_embed_search" => object_schema(
+            &[
+                ("query", string_schema()),
+                ("version", string_schema()),
+                ("topK", integer_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &["query"],
+            false,
+        ),
         _ => default_params_schema(),
     }
 }
@@ -2334,7 +2471,7 @@ mod tests {
 
     #[test]
     fn tool_catalog_keeps_manifest_parity_count() {
-        assert_eq!(TOOL_NAMES.len(), 118);
+        assert_eq!(TOOL_NAMES.len(), 129);
     }
 
     #[test]

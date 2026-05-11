@@ -143,3 +143,34 @@ MIT License
 4. **ドキュメント**: アプリケーションのユーザーマニュアルやオンラインドキュメントに表記します。
 
 `unity-cli-bridge` は Editor 専用パッケージ（Unity Editor 内でのみ動作し、ビルドには含まれない）であるため、出荷ビルドでの帰属表示は厳密には不要な場合があります。ただし、ソースコードを再配布または改変する場合は帰属表示が必要です。
+
+---
+
+## Third-Party: UnityCsReference (Unity Companion License)
+
+`unity-cli reference fetch` clones the official Unity C# reference source from
+[`Unity-Technologies/UnityCsReference`](https://github.com/Unity-Technologies/UnityCsReference)
+into a local read-only cache (`~/.unity/cache/UnityCsReference/<version>/`).
+The cached source is © Unity Technologies and is distributed under the
+[Unity Companion License](https://unity.com/legal/licenses/unity-companion-license).
+
+- Purpose: local read-only reference for LLM-assisted Unity C# implementation.
+- Acceptance: required via the `--accept-license` flag or the
+  `UNITY_CLI_ACCEPT_LICENSE=1` environment variable before any fetch runs.
+- Restriction: do not redistribute the cached source. The cache is for
+  personal local use only.
+
+### Unity Companion License（日本語要約）
+
+`unity-cli reference fetch` は Unity 公式の C# リファレンス
+（`Unity-Technologies/UnityCsReference` リポジトリ）を
+`~/.unity/cache/UnityCsReference/<version>/` 配下にローカル読み取り専用で
+キャッシュします。キャッシュされたソースは Unity Technologies の著作物で、
+[Unity Companion License](https://unity.com/legal/licenses/unity-companion-license)
+に従って利用してください。
+
+- 用途: LLM 支援による Unity C# 実装の参照用ローカルキャッシュ。
+- 同意: `--accept-license` フラグ、または `UNITY_CLI_ACCEPT_LICENSE=1`
+  環境変数で同意を明示してから fetch を実行してください。
+- 制限: キャッシュ済みソースの再配布は禁止です。利用は個人のローカル参照に
+  限定してください。

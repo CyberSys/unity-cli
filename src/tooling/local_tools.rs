@@ -65,6 +65,9 @@ struct ScopedType {
 }
 
 pub fn maybe_execute_local_tool(tool_name: &str, params: &Value) -> Option<Result<Value>> {
+    if let Some(result) = crate::reference::maybe_execute_reference_tool(tool_name, params) {
+        return Some(result);
+    }
     match tool_name {
         "read" => Some(local_read(params)),
         "search" => Some(local_search(params)),

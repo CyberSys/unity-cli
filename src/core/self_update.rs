@@ -97,3 +97,99 @@ fn run_update(marker: &Path) -> anyhow::Result<()> {
     tracing::debug!("self-update: successfully installed {}", latest.version);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn env_lock() -> &'static std::sync::Mutex<()> {
+        crate::test_env::env_lock()
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+        fn unset(key: &'static str) -> Self {
+            let previous = std::env::var(key).ok();
+            std::env::remove_var(key);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(value) = &self.previous {
+                std::env::set_var(self.key, value);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
+    #[test]
+    fn maybe_self_update_skipped_when_opt_out_env_set() {
+        let _guard = env_lock().lock().unwrap_or_else(|p| p.into_inner());
+        let _env = EnvVarGuard::set("UNITY_CLI_NO_AUTO_UPDATE", "1");
+        assert!(maybe_self_update().is_none());
+    }
+
+    #[test]
+    fn warn_cargo_conflict_runs_without_panic() {
+        warn_cargo_conflict();
+    }
+
+    #[test]
+    fn touch_creates_parent_and_writes_marker() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let marker = tmp.path().join("nested/dir/LAST_CHECK");
+        touch(&marker);
+        assert!(marker.exists());
+        assert!(marker.parent().unwrap().is_dir());
+    }
+
+    #[test]
+    fn is_recent_returns_false_for_missing_path() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        assert!(!is_recent(&tmp.path().join("nonexistent")));
+    }
+
+    #[test]
+    fn is_recent_returns_true_for_freshly_touched_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("recent");
+        touch(&path);
+        assert!(is_recent(&path));
+    }
+
+    #[test]
+    fn last_check_path_uses_unity_cli_tools_root_env() {
+        let _guard = env_lock().lock().unwrap_or_else(|p| p.into_inner());
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _env = EnvVarGuard::set("UNITY_CLI_TOOLS_ROOT", tmp.path().to_str().unwrap());
+        let path = last_check_path().unwrap();
+        assert!(path.starts_with(tmp.path()));
+        assert!(path.ends_with("LAST_UPDATE_CHECK"));
+    }
+
+    #[test]
+    fn maybe_self_update_skips_when_recent_check_exists() {
+        let _guard = env_lock().lock().unwrap_or_else(|p| p.into_inner());
+        let _no_auto = EnvVarGuard::unset("UNITY_CLI_NO_AUTO_UPDATE");
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _tools_env = EnvVarGuard::set("UNITY_CLI_TOOLS_ROOT", tmp.path().to_str().unwrap());
+        let marker = last_check_path().unwrap();
+        if let Some(parent) = marker.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(&marker, b"").unwrap();
+        assert!(maybe_self_update().is_none());
+    }
+}

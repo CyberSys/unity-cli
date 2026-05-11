@@ -78,6 +78,10 @@ pub enum Command {
         #[command(subcommand)]
         command: SkillsCommand,
     },
+    Reference {
+        #[command(subcommand)]
+        command: ReferenceCommand,
+    },
     Batch {
         #[arg(long, value_name = "JSON")]
         json: Option<String>,
@@ -214,5 +218,114 @@ pub enum SkillsCommand {
         /// Severity gate; `error` exits non-zero on any violation.
         #[arg(long, value_enum, default_value_t = SkillSeverity::Warning)]
         severity: SkillSeverity,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ReferenceCommand {
+    /// Fetch UnityCsReference for the active Unity version into the local cache.
+    Fetch {
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        branch: Option<String>,
+        #[arg(long, default_value_t = false)]
+        force: bool,
+        #[arg(long, default_value_t = false)]
+        accept_license: bool,
+    },
+    /// Show cached UnityCsReference versions and disk usage.
+    Status {
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Search the cached reference source for a pattern (file-level hits).
+    Search {
+        pattern: String,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        path: Option<String>,
+        #[arg(long)]
+        max_results: Option<u64>,
+        #[arg(long, default_value_t = false)]
+        regex: bool,
+    },
+    /// Grep the cached reference source line-by-line with optional context.
+    Grep {
+        pattern: String,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        file_glob: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        context: u32,
+    },
+    /// View a file from the cached reference source with an optional line range.
+    View {
+        path: String,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        start_line: Option<u32>,
+        #[arg(long)]
+        max_lines: Option<u32>,
+    },
+    /// Find a symbol (class/interface/struct/enum) in the cached reference index.
+    FindSymbol {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        kind: Option<String>,
+        #[arg(long)]
+        namespace: Option<String>,
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Diff a symbol or path range between two cached Unity versions.
+    Diff {
+        #[arg(long)]
+        from: String,
+        #[arg(long)]
+        to: String,
+        #[arg(long)]
+        symbol: Option<String>,
+        #[arg(long)]
+        path: Option<String>,
+        #[arg(long)]
+        max_symbols: Option<u64>,
+    },
+    /// Resolve the C# token at a cursor position to candidate reference cache entries.
+    ResolveSymbolAt {
+        path: String,
+        #[arg(long)]
+        line: u32,
+        #[arg(long)]
+        column: u32,
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Build the embedding index for a cached Unity version (uses fastembed).
+    EmbedBuild {
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Semantic search over the embedding index for a cached Unity version.
+    EmbedSearch {
+        #[arg(long)]
+        query: String,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        top_k: Option<u64>,
+    },
+    /// Remove old UnityCsReference snapshots, keeping the newest entries.
+    Clean {
+        #[arg(long, default_value_t = 1)]
+        keep: u64,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
     },
 }

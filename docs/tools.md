@@ -249,6 +249,48 @@ unity-cli tool schema input_keyboard --output json
 unity-cli tool schema package_manager --output json
 ```
 
+## Reference Cache (11 tools)
+
+The `unity-cli reference *` family provides a local read-only mirror of the
+official [UnityCsReference](https://github.com/Unity-Technologies/UnityCsReference)
+source. Use it when you need the canonical signature or internal
+implementation of a Unity API. The cache lives under
+`~/.unity/cache/UnityCsReference/<version>/` (override with
+`UNITY_CLI_CACHE_ROOT`). License acceptance is mandatory before the first
+fetch via `--accept-license` or `UNITY_CLI_ACCEPT_LICENSE=1`.
+
+| Tool | Description |
+| --- | --- |
+| `reference_fetch` | Shallow-clone UnityCsReference for the active Unity version into the local cache. |
+| `reference_status` | List cached UnityCsReference versions, branches, fetched-at, and disk usage. |
+| `reference_search` | Search the cached reference source for a pattern with optional path and result limits. |
+| `reference_grep` | Grep the cached reference source line-by-line with optional file glob and context lines. |
+| `reference_view` | Display a slice of a file in the cached reference source by line range. |
+| `reference_clean` | Remove old UnityCsReference snapshots, keeping the newest entries. |
+| `reference_find_symbol` | Look up type / method / property definitions in the cached reference source via a per-version on-disk index. |
+| `reference_diff` | Compare a symbol or path range between two cached Unity versions. Returns symbol-level hunks or `{added, removed, changed}`. |
+| `reference_resolve_symbol_at` | Resolve the identifier at a project cursor position (`Assets/...` / `Packages/...`) to candidate reference cache entries with view excerpts. |
+| `reference_embed_build` | Build an embedding index (BGE-Small-EN, ONNX) for a cached Unity version. Writes `.unity-cli-index/embeddings.bin`. |
+| `reference_embed_search` | Semantic / natural-language lookup over the embedding index. Returns hits sorted by cosine similarity. |
+
+Typed CLI equivalents:
+
+```bash
+unity-cli reference fetch --accept-license
+unity-cli reference status --output json
+unity-cli reference find-symbol --name Animator --kind class
+unity-cli reference grep "class Animator " --context 3
+unity-cli reference view Runtime/Export/Animation/Animator.bindings.cs --start-line 100 --max-lines 60
+unity-cli reference diff --from 2022.3.10f1 --to 2023.2.20f1 --symbol UnityEngine.Animator
+unity-cli reference resolve-symbol-at Assets/Scripts/Player.cs --line 42 --column 18
+unity-cli reference embed-build --version 2023.2.20f1
+unity-cli reference embed-search --query "animator state callback" --version 2023.2.20f1
+unity-cli reference clean --keep 1 --dry-run
+```
+
+See `.claude-plugin/plugins/unity-cli/skills/unity-csharp-reference/` for the
+companion skill and the `reference -> navigate -> edit` workflow.
+
 ## Regenerate This Catalog
 
 ```bash

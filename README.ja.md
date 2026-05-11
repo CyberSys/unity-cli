@@ -9,6 +9,7 @@
 
 - Claude Code から、用途別スキルと typed コマンドで Unity を操作できます。
 - シーン、アセット、コード、テスト、UI、Editor を含む `101` 個の Unity Tool API を利用できます。
+- Unity 公式 C# リファレンス（[UnityCsReference](https://github.com/Unity-Technologies/UnityCsReference)）を `unity-cli reference fetch` でローカルキャッシュし、`unity-csharp-reference` スキルから読み取り専用で参照できます。
 - 単一バイナリで高速起動、低オーバーヘッドです。
 
 ## 仕組み

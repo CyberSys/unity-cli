@@ -9,7 +9,7 @@ use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use ureq::Agent;
+use ureq::{http, Agent, Body};
 
 const DOWNLOAD_TIMEOUT_SECS: u64 = 30;
 const HTTP_MAX_ATTEMPTS: usize = 3;
@@ -164,6 +164,14 @@ pub fn tools_root() -> Result<PathBuf> {
         .map(|root| PathBuf::from(root.trim()))
         .or_else(|| dirs::home_dir().map(|home| home.join(".unity/tools")))
         .ok_or_else(|| anyhow!("Unable to resolve tools root"))
+}
+
+pub fn cache_root() -> Result<PathBuf> {
+    env::var("UNITY_CLI_CACHE_ROOT")
+        .ok()
+        .map(|root| PathBuf::from(root.trim()))
+        .or_else(|| dirs::home_dir().map(|home| home.join(".unity/cache")))
+        .ok_or_else(|| anyhow!("Unable to resolve cache root"))
 }
 
 pub fn install_dir() -> Result<PathBuf> {
@@ -437,7 +445,7 @@ fn fetch_latest_release_for_repo(
 
 fn download_to(url: &str, dest: &Path) -> Result<()> {
     let response = get_response(url)?;
-    let mut reader = response.into_reader();
+    let mut reader = response.into_body().into_reader();
 
     let mut file = fs::File::create(dest)
         .with_context(|| format!("Failed to create temporary file: {}", dest.display()))?;
@@ -462,7 +470,11 @@ fn sha256_file(path: &Path) -> Result<String> {
         }
         hasher.update(&buffer[..read]);
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>())
 }
 
 fn replace_file_atomic(tmp: &Path, dest: &Path) -> Result<()> {
@@ -514,39 +526,36 @@ fn replace_file_atomic(tmp: &Path, dest: &Path) -> Result<()> {
 }
 
 fn http_client() -> Result<Agent> {
-    Ok(ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(DOWNLOAD_TIMEOUT_SECS))
-        .build())
+    let config = Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(DOWNLOAD_TIMEOUT_SECS)))
+        .build();
+    Ok(Agent::new_with_config(config))
 }
 
-fn get_response(url: &str) -> Result<ureq::Response> {
+fn get_response(url: &str) -> Result<http::Response<Body>> {
     let client = http_client()?;
     let token = github_token_from_env();
     let mut last_error = None;
 
     for attempt in 1..=HTTP_MAX_ATTEMPTS {
-        let mut request = client.get(url).set("User-Agent", USER_AGENT_VALUE);
+        let mut request = client.get(url).header("User-Agent", USER_AGENT_VALUE);
         if let Some(token) = token.as_deref() {
-            request = request.set("Authorization", &format!("Bearer {token}"));
+            request = request.header("Authorization", format!("Bearer {token}"));
         }
 
         match request.call() {
             Ok(response) => return Ok(response),
-            Err(ureq::Error::Status(status, response)) => {
-                let body = response
-                    .into_string()
-                    .map(|body| format!(" body={body}"))
-                    .unwrap_or_default();
-                let error = anyhow!("HTTP {status} for {url}{body}");
-                if attempt < HTTP_MAX_ATTEMPTS && is_retryable_status(status) {
+            Err(ureq::Error::StatusCode(code)) => {
+                let error = anyhow!("HTTP {code} for {url}");
+                if attempt < HTTP_MAX_ATTEMPTS && is_retryable_status(code) {
                     last_error = Some(error);
                     sleep_before_retry(attempt);
                     continue;
                 }
                 return Err(error);
             }
-            Err(ureq::Error::Transport(error)) => {
-                let error = anyhow!("Failed to request {url}: {error}");
+            Err(e) => {
+                let error = anyhow!("Failed to request {url}: {e}");
                 if attempt < HTTP_MAX_ATTEMPTS {
                     last_error = Some(error);
                     sleep_before_retry(attempt);
@@ -594,9 +603,10 @@ fn should_skip_remote_checks_for_tests() -> bool {
 }
 
 fn get_json<T: for<'de> Deserialize<'de>>(url: &str) -> Result<T> {
-    let response = get_response(url)?;
+    let mut response = get_response(url)?;
     response
-        .into_json::<T>()
+        .body_mut()
+        .read_json::<T>()
         .with_context(|| format!("Failed to parse JSON: {url}"))
 }
 
@@ -749,6 +759,59 @@ mod tests {
         let _env = EnvVarGuard::set("UNITY_CLI_TOOLS_ROOT", &root_with_spaces);
         let resolved = tools_root().expect("tools root should resolve");
         assert_eq!(resolved, root);
+    }
+
+    #[test]
+    fn cache_root_prefers_unity_cli_cache_root_env() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let root = unique_temp_path("cache-root");
+        let root_with_spaces = format!("  {}  ", root.display());
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", &root_with_spaces);
+        let resolved = cache_root().expect("cache root should resolve");
+        assert_eq!(resolved, root);
+    }
+
+    #[test]
+    fn cache_root_falls_back_to_home_unity_cache() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let previous = env::var("UNITY_CLI_CACHE_ROOT").ok();
+        env::remove_var("UNITY_CLI_CACHE_ROOT");
+        let resolved = cache_root().expect("cache root should resolve");
+        if let Some(home) = dirs::home_dir() {
+            assert_eq!(resolved, home.join(".unity/cache"));
+        }
+        if let Some(value) = previous {
+            env::set_var("UNITY_CLI_CACHE_ROOT", value);
+        }
+    }
+
+    #[test]
+    fn tools_root_falls_back_to_home_unity_tools_when_env_unset() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let previous = env::var("UNITY_CLI_TOOLS_ROOT").ok();
+        env::remove_var("UNITY_CLI_TOOLS_ROOT");
+        let resolved = tools_root().expect("tools root should resolve");
+        if let Some(home) = dirs::home_dir() {
+            assert_eq!(resolved, home.join(".unity/tools"));
+        }
+        if let Some(value) = previous {
+            env::set_var("UNITY_CLI_TOOLS_ROOT", value);
+        }
+    }
+
+    #[test]
+    fn detect_rid_returns_known_target_triple() {
+        let rid = detect_rid();
+        assert!(matches!(
+            rid,
+            "win-x64" | "win-arm64" | "osx-x64" | "osx-arm64" | "linux-x64" | "linux-arm64"
+        ));
     }
 
     #[test]
@@ -928,7 +991,8 @@ mod tests {
         let _ = get_response(&url).expect("authorized request should succeed");
         handle.join().expect("server thread should complete");
         let request = captured_request.lock().expect("request lock");
-        assert!(request.contains(&format!("Authorization: Bearer {token}")));
+        let request_lower = request.to_lowercase();
+        assert!(request_lower.contains(&format!("authorization: bearer {token}")));
     }
 
     #[test]
@@ -944,8 +1008,7 @@ mod tests {
         let (url, handle) = run_http_server_once("403 Forbidden", "{\"message\":\"forbidden\"}");
         let error = get_json::<ReleaseInfo>(&url).expect_err("HTTP 403 should fail");
         handle.join().expect("server thread should complete");
-        assert!(error.to_string().contains("HTTP 403"));
-        assert!(error.to_string().contains("forbidden"));
+        assert!(error.to_string().contains("403"));
     }
 
     #[test]

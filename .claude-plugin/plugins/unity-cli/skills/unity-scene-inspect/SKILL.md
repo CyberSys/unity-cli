@@ -16,6 +16,7 @@ metadata:
     - unity-scene-create
     - unity-gameobject-edit
     - unity-csharp-navigate
+    - unity-csharp-reference
 ---
 
 # Scene Inspect

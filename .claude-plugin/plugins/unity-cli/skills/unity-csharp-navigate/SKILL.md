@@ -14,6 +14,7 @@ metadata:
     - symbol
   siblings:
     - unity-csharp-edit
+    - unity-csharp-reference
     - unity-scene-inspect
 ---
 

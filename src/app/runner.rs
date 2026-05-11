@@ -7,8 +7,8 @@ use tracing_subscriber::EnvFilter;
 
 use crate::cli::{
     Cli, CliCommand, Command, InstancesCommand, LspCommand, LspdCommand, OutputFormat, RawArgs,
-    SceneCommand, SkillFormat, SkillSeverity, SkillsCommand, SystemCommand, ToolCommand,
-    UnitydCommand,
+    ReferenceCommand, SceneCommand, SkillFormat, SkillSeverity, SkillsCommand, SystemCommand,
+    ToolCommand, UnitydCommand,
 };
 use crate::config::RuntimeConfig;
 use crate::core::command_stats::{self, CliCommandTiming};
@@ -218,6 +218,11 @@ pub async fn run_with_cli(cli: Cli) -> Result<()> {
                 run_skills_lint(root.as_deref(), *format, *severity)?;
             }
         },
+        Command::Reference { command } => {
+            let (tool, params) = build_reference_call(command);
+            let value = execute_tool(&cli, tool, params).await?;
+            print_value(&value, cli.output)?;
+        }
         Command::Batch { json, stdin } => {
             let value = execute_batch(&cli, json.as_deref(), *stdin).await?;
             print_value(&value, cli.output)?;
@@ -232,6 +237,185 @@ pub async fn run_with_cli(cli: Cli) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn build_reference_call(command: &ReferenceCommand) -> (&'static str, Value) {
+    let mut params = serde_json::Map::new();
+    let tool: &'static str = match command {
+        ReferenceCommand::Fetch {
+            version,
+            branch,
+            force,
+            accept_license,
+        } => {
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            if let Some(b) = branch {
+                params.insert("branch".to_string(), Value::String(b.clone()));
+            }
+            params.insert("force".to_string(), Value::Bool(*force));
+            params.insert("acceptLicense".to_string(), Value::Bool(*accept_license));
+            "reference_fetch"
+        }
+        ReferenceCommand::Status { version } => {
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            "reference_status"
+        }
+        ReferenceCommand::Search {
+            pattern,
+            version,
+            path,
+            max_results,
+            regex,
+        } => {
+            params.insert("pattern".to_string(), Value::String(pattern.clone()));
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            if let Some(p) = path {
+                params.insert("path".to_string(), Value::String(p.clone()));
+            }
+            if let Some(n) = max_results {
+                params.insert("maxResults".to_string(), Value::Number((*n).into()));
+            }
+            params.insert("regex".to_string(), Value::Bool(*regex));
+            "reference_search"
+        }
+        ReferenceCommand::Grep {
+            pattern,
+            version,
+            file_glob,
+            context,
+        } => {
+            params.insert("pattern".to_string(), Value::String(pattern.clone()));
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            if let Some(g) = file_glob {
+                params.insert("fileGlob".to_string(), Value::String(g.clone()));
+            }
+            params.insert(
+                "context".to_string(),
+                Value::Number((u64::from(*context)).into()),
+            );
+            "reference_grep"
+        }
+        ReferenceCommand::View {
+            path,
+            version,
+            start_line,
+            max_lines,
+        } => {
+            params.insert("path".to_string(), Value::String(path.clone()));
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            if let Some(n) = start_line {
+                params.insert(
+                    "startLine".to_string(),
+                    Value::Number((u64::from(*n)).into()),
+                );
+            }
+            if let Some(n) = max_lines {
+                params.insert(
+                    "maxLines".to_string(),
+                    Value::Number((u64::from(*n)).into()),
+                );
+            }
+            "reference_view"
+        }
+        ReferenceCommand::FindSymbol {
+            name,
+            kind,
+            namespace,
+            version,
+        } => {
+            params.insert("name".to_string(), Value::String(name.clone()));
+            if let Some(k) = kind {
+                params.insert("kind".to_string(), Value::String(k.clone()));
+            }
+            if let Some(ns) = namespace {
+                params.insert("namespace".to_string(), Value::String(ns.clone()));
+            }
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            return ("reference_find_symbol", Value::Object(params));
+        }
+        ReferenceCommand::Diff {
+            from,
+            to,
+            symbol,
+            path,
+            max_symbols,
+        } => {
+            params.insert("from".to_string(), Value::String(from.clone()));
+            params.insert("to".to_string(), Value::String(to.clone()));
+            if let Some(s) = symbol {
+                params.insert("symbol".to_string(), Value::String(s.clone()));
+            }
+            if let Some(p) = path {
+                params.insert("path".to_string(), Value::String(p.clone()));
+            }
+            if let Some(n) = max_symbols {
+                params.insert("maxSymbols".to_string(), Value::Number((*n).into()));
+            }
+            return ("reference_diff", Value::Object(params));
+        }
+        ReferenceCommand::ResolveSymbolAt {
+            path,
+            line,
+            column,
+            version,
+        } => {
+            params.insert("path".to_string(), Value::String(path.clone()));
+            params.insert("line".to_string(), Value::Number((u64::from(*line)).into()));
+            params.insert(
+                "column".to_string(),
+                Value::Number((u64::from(*column)).into()),
+            );
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            return ("reference_resolve_symbol_at", Value::Object(params));
+        }
+        ReferenceCommand::EmbedBuild { version } => {
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            return ("reference_embed_build", Value::Object(params));
+        }
+        ReferenceCommand::EmbedSearch {
+            query,
+            version,
+            top_k,
+        } => {
+            params.insert("query".to_string(), Value::String(query.clone()));
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            if let Some(k) = top_k {
+                params.insert("topK".to_string(), Value::Number((*k).into()));
+            }
+            return ("reference_embed_search", Value::Object(params));
+        }
+        ReferenceCommand::Clean {
+            keep,
+            version,
+            dry_run,
+        } => {
+            params.insert("keep".to_string(), Value::Number((*keep).into()));
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            params.insert("dryRun".to_string(), Value::Bool(*dry_run));
+            "reference_clean"
+        }
+    };
+    (tool, Value::Object(params))
 }
 
 async fn execute_raw(cli: &Cli, args: &RawArgs) -> Result<Value> {
@@ -450,15 +634,11 @@ fn validate_value_against_schema(value: &Value, schema: &Value, path: &str) -> R
         match expected_type {
             "object" => validate_object(value, schema, path)?,
             "array" => validate_array(value, schema, path)?,
-            "string" => {
-                if !value.is_string() {
-                    return Err(anyhow!("{path} must be a string"));
-                }
+            "string" if !value.is_string() => {
+                return Err(anyhow!("{path} must be a string"));
             }
-            "boolean" => {
-                if !value.is_boolean() {
-                    return Err(anyhow!("{path} must be a boolean"));
-                }
+            "boolean" if !value.is_boolean() => {
+                return Err(anyhow!("{path} must be a boolean"));
             }
             "integer" => {
                 let is_integer = value.as_i64().is_some()
@@ -468,10 +648,8 @@ fn validate_value_against_schema(value: &Value, schema: &Value, path: &str) -> R
                     return Err(anyhow!("{path} must be an integer"));
                 }
             }
-            "number" => {
-                if value.as_f64().is_none() {
-                    return Err(anyhow!("{path} must be a number"));
-                }
+            "number" if value.as_f64().is_none() => {
+                return Err(anyhow!("{path} must be a number"));
             }
             _ => {}
         }
@@ -809,12 +987,12 @@ fn init_tracing(verbose: u8) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        execute_tool, init_tracing, load_params, parse_external_tool_command, parse_json_object,
-        parse_ports, print_value, run_with_cli, validate_tool_params,
+        build_reference_call, execute_tool, init_tracing, load_params, parse_external_tool_command,
+        parse_json_object, parse_ports, print_value, run_with_cli, validate_tool_params,
     };
     use crate::cli::{
-        Cli, Command, InstancesCommand, LspdCommand, OutputFormat, RawArgs, SceneCommand,
-        SystemCommand, ToolCommand, UnitydCommand,
+        Cli, Command, InstancesCommand, LspdCommand, OutputFormat, RawArgs, ReferenceCommand,
+        SceneCommand, SystemCommand, ToolCommand, UnitydCommand,
     };
     use serde_json::json;
     use tempfile::tempdir;
@@ -1877,6 +2055,318 @@ mod tests {
         .await
         .expect_err("batch command must require input");
         assert!(format!("{err:#}").contains("Provide --json or --stdin"));
+    }
+
+    #[test]
+    fn build_reference_call_status_includes_explicit_version() {
+        let cmd = ReferenceCommand::Status {
+            version: Some("2023.2.20f1".to_string()),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_status");
+        assert_eq!(params["version"], "2023.2.20f1");
+    }
+
+    #[test]
+    fn build_reference_call_status_omits_optional_version() {
+        let cmd = ReferenceCommand::Status { version: None };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_status");
+        assert!(params.get("version").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_fetch_carries_all_flags() {
+        let cmd = ReferenceCommand::Fetch {
+            version: Some("2023.2.20f1".to_string()),
+            branch: Some("2023.2/staging".to_string()),
+            force: true,
+            accept_license: true,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_fetch");
+        assert_eq!(params["version"], "2023.2.20f1");
+        assert_eq!(params["branch"], "2023.2/staging");
+        assert_eq!(params["force"], true);
+        assert_eq!(params["acceptLicense"], true);
+    }
+
+    #[test]
+    fn build_reference_call_fetch_defaults_without_overrides() {
+        let cmd = ReferenceCommand::Fetch {
+            version: None,
+            branch: None,
+            force: false,
+            accept_license: false,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_fetch");
+        assert!(params.get("version").is_none());
+        assert!(params.get("branch").is_none());
+        assert_eq!(params["force"], false);
+        assert_eq!(params["acceptLicense"], false);
+    }
+
+    #[test]
+    fn build_reference_call_search_with_all_options() {
+        let cmd = ReferenceCommand::Search {
+            pattern: "Animator".to_string(),
+            version: Some("2023.2.20f1".to_string()),
+            path: Some("Runtime/Animator*.cs".to_string()),
+            max_results: Some(5),
+            regex: true,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_search");
+        assert_eq!(params["pattern"], "Animator");
+        assert_eq!(params["version"], "2023.2.20f1");
+        assert_eq!(params["path"], "Runtime/Animator*.cs");
+        assert_eq!(params["maxResults"], 5);
+        assert_eq!(params["regex"], true);
+    }
+
+    #[test]
+    fn build_reference_call_search_minimal_pattern() {
+        let cmd = ReferenceCommand::Search {
+            pattern: "Foo".to_string(),
+            version: None,
+            path: None,
+            max_results: None,
+            regex: false,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_search");
+        assert_eq!(params["pattern"], "Foo");
+        assert_eq!(params["regex"], false);
+        assert!(params.get("version").is_none());
+        assert!(params.get("maxResults").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_grep_with_file_glob_and_context() {
+        let cmd = ReferenceCommand::Grep {
+            pattern: "class".to_string(),
+            version: Some("2023.2.20f1".to_string()),
+            file_glob: Some("*.cs".to_string()),
+            context: 3,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_grep");
+        assert_eq!(params["pattern"], "class");
+        assert_eq!(params["fileGlob"], "*.cs");
+        assert_eq!(params["context"], 3);
+        assert_eq!(params["version"], "2023.2.20f1");
+    }
+
+    #[test]
+    fn build_reference_call_grep_defaults_context_to_zero() {
+        let cmd = ReferenceCommand::Grep {
+            pattern: "class".to_string(),
+            version: None,
+            file_glob: None,
+            context: 0,
+        };
+        let (_tool, params) = build_reference_call(&cmd);
+        assert_eq!(params["context"], 0);
+        assert!(params.get("fileGlob").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_view_with_range() {
+        let cmd = ReferenceCommand::View {
+            path: "Runtime/Export/Animation/Animator.bindings.cs".to_string(),
+            version: Some("2023.2.20f1".to_string()),
+            start_line: Some(100),
+            max_lines: Some(60),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_view");
+        assert_eq!(
+            params["path"],
+            "Runtime/Export/Animation/Animator.bindings.cs"
+        );
+        assert_eq!(params["startLine"], 100);
+        assert_eq!(params["maxLines"], 60);
+    }
+
+    #[test]
+    fn build_reference_call_view_omits_optional_lines() {
+        let cmd = ReferenceCommand::View {
+            path: "Editor/Foo.cs".to_string(),
+            version: None,
+            start_line: None,
+            max_lines: None,
+        };
+        let (_tool, params) = build_reference_call(&cmd);
+        assert_eq!(params["path"], "Editor/Foo.cs");
+        assert!(params.get("startLine").is_none());
+        assert!(params.get("maxLines").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_clean_with_version() {
+        let cmd = ReferenceCommand::Clean {
+            keep: 2,
+            version: Some("legacy".to_string()),
+            dry_run: true,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_clean");
+        assert_eq!(params["keep"], 2);
+        assert_eq!(params["version"], "legacy");
+        assert_eq!(params["dryRun"], true);
+    }
+
+    #[test]
+    fn build_reference_call_diff_symbol_mode() {
+        let cmd = ReferenceCommand::Diff {
+            from: "2022.3.10f1".to_string(),
+            to: "2023.2.20f1".to_string(),
+            symbol: Some("UnityEngine.Animator".to_string()),
+            path: None,
+            max_symbols: None,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_diff");
+        assert_eq!(params["from"], "2022.3.10f1");
+        assert_eq!(params["to"], "2023.2.20f1");
+        assert_eq!(params["symbol"], "UnityEngine.Animator");
+        assert!(params.get("path").is_none());
+        assert!(params.get("maxSymbols").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_diff_path_mode_with_limit() {
+        let cmd = ReferenceCommand::Diff {
+            from: "v1".to_string(),
+            to: "v2".to_string(),
+            symbol: None,
+            path: Some("Runtime/Export".to_string()),
+            max_symbols: Some(20),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_diff");
+        assert_eq!(params["path"], "Runtime/Export");
+        assert_eq!(params["maxSymbols"], 20);
+        assert!(params.get("symbol").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_resolve_symbol_at_with_version() {
+        let cmd = ReferenceCommand::ResolveSymbolAt {
+            path: "Assets/Scripts/Player.cs".to_string(),
+            line: 42,
+            column: 18,
+            version: Some("2023.2.20f1".to_string()),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_resolve_symbol_at");
+        assert_eq!(params["path"], "Assets/Scripts/Player.cs");
+        assert_eq!(params["line"], 42);
+        assert_eq!(params["column"], 18);
+        assert_eq!(params["version"], "2023.2.20f1");
+    }
+
+    #[test]
+    fn build_reference_call_resolve_symbol_at_minimal() {
+        let cmd = ReferenceCommand::ResolveSymbolAt {
+            path: "Packages/com.acme/Foo.cs".to_string(),
+            line: 1,
+            column: 1,
+            version: None,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_resolve_symbol_at");
+        assert!(params.get("version").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_embed_build_includes_version() {
+        let cmd = ReferenceCommand::EmbedBuild {
+            version: Some("2023.2.20f1".to_string()),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_embed_build");
+        assert_eq!(params["version"], "2023.2.20f1");
+    }
+
+    #[test]
+    fn build_reference_call_embed_build_omits_optional_version() {
+        let cmd = ReferenceCommand::EmbedBuild { version: None };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_embed_build");
+        assert!(params.get("version").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_embed_search_with_top_k() {
+        let cmd = ReferenceCommand::EmbedSearch {
+            query: "animator state callback".to_string(),
+            version: Some("2023.2.20f1".to_string()),
+            top_k: Some(5),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_embed_search");
+        assert_eq!(params["query"], "animator state callback");
+        assert_eq!(params["version"], "2023.2.20f1");
+        assert_eq!(params["topK"], 5);
+    }
+
+    #[test]
+    fn build_reference_call_embed_search_omits_optional_top_k() {
+        let cmd = ReferenceCommand::EmbedSearch {
+            query: "foo".to_string(),
+            version: None,
+            top_k: None,
+        };
+        let (_tool, params) = build_reference_call(&cmd);
+        assert_eq!(params["query"], "foo");
+        assert!(params.get("topK").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_find_symbol_with_filters() {
+        let cmd = ReferenceCommand::FindSymbol {
+            name: "Animator".to_string(),
+            kind: Some("class".to_string()),
+            namespace: Some("UnityEngine".to_string()),
+            version: Some("2023.2.20f1".to_string()),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_find_symbol");
+        assert_eq!(params["name"], "Animator");
+        assert_eq!(params["kind"], "class");
+        assert_eq!(params["namespace"], "UnityEngine");
+        assert_eq!(params["version"], "2023.2.20f1");
+    }
+
+    #[test]
+    fn build_reference_call_find_symbol_minimal() {
+        let cmd = ReferenceCommand::FindSymbol {
+            name: "Foo".to_string(),
+            kind: None,
+            namespace: None,
+            version: None,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_find_symbol");
+        assert_eq!(params["name"], "Foo");
+        assert!(params.get("kind").is_none());
+        assert!(params.get("namespace").is_none());
+        assert!(params.get("version").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_clean_defaults() {
+        let cmd = ReferenceCommand::Clean {
+            keep: 1,
+            version: None,
+            dry_run: false,
+        };
+        let (_tool, params) = build_reference_call(&cmd);
+        assert_eq!(params["keep"], 1);
+        assert_eq!(params["dryRun"], false);
+        assert!(params.get("version").is_none());
     }
 
     #[allow(clippy::await_holding_lock)]

@@ -15,6 +15,7 @@ metadata:
     - setting
   siblings:
     - unity-csharp-navigate
+    - unity-csharp-reference
     - unity-editor-tools
     - unity-cli-usage
     - unity-gameobject-edit
