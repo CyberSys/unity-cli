@@ -58,6 +58,8 @@ impl Default for ReferenceSymbolIndex {
 pub fn extract_symbols_from_text(content: &str, rel_path: &str) -> Vec<ReferenceSymbolEntry> {
     static NAMESPACE_RE: OnceLock<Regex> = OnceLock::new();
     static TYPE_RE: OnceLock<Regex> = OnceLock::new();
+    static METHOD_RE: OnceLock<Regex> = OnceLock::new();
+    static PROPERTY_RE: OnceLock<Regex> = OnceLock::new();
     let ns_re = NAMESPACE_RE.get_or_init(|| {
         Regex::new(r"(?m)^\s*namespace\s+([A-Za-z_][A-Za-z0-9_.]*)")
             .expect("namespace regex compiles")
@@ -68,12 +70,25 @@ pub fn extract_symbols_from_text(content: &str, rel_path: &str) -> Vec<Reference
         )
         .expect("type regex compiles")
     });
+    let method_re = METHOD_RE.get_or_init(|| {
+        Regex::new(
+            r"(?m)^[ \t]*(?:\[[^\]]*\][ \t]*)*(?:public|internal|protected|private)[ \t]+(?:(?:static|virtual|override|abstract|sealed|partial|async|extern|new|readonly|unsafe)[ \t]+)*(?:[A-Za-z_][\w<>,\?\[\]\. \t]*?)[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*\(",
+        )
+        .expect("method regex compiles")
+    });
+    let property_re = PROPERTY_RE.get_or_init(|| {
+        Regex::new(
+            r"(?m)^[ \t]*(?:\[[^\]]*\][ \t]*)*(?:public|internal|protected|private)[ \t]+(?:(?:static|virtual|override|abstract|sealed|partial|readonly)[ \t]+)*(?:[A-Za-z_][\w<>,\?\[\]\. \t]*?)[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*\{[ \t]*(?:get|set)",
+        )
+        .expect("property regex compiles")
+    });
 
     let namespace = ns_re
         .captures(content)
         .and_then(|c| c.get(1).map(|m| m.as_str().to_string()));
 
     let mut symbols = Vec::new();
+    let mut consumed_spans: Vec<(usize, usize)> = Vec::new();
     for cap in type_re.captures_iter(content) {
         let kind = cap
             .get(1)
@@ -87,6 +102,7 @@ pub fn extract_symbols_from_text(content: &str, rel_path: &str) -> Vec<Reference
             continue;
         }
         let full = cap.get(0).expect("full match exists");
+        consumed_spans.push((full.start(), full.end()));
         let line = (content[..full.start()].matches('\n').count() as u32) + 1;
         let fqn = namespace.as_ref().map(|ns| format!("{ns}.{name}"));
         symbols.push(ReferenceSymbolEntry {
@@ -99,7 +115,60 @@ pub fn extract_symbols_from_text(content: &str, rel_path: &str) -> Vec<Reference
             fqn,
         });
     }
+    for cap in property_re.captures_iter(content) {
+        let name = cap
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
+        if name.is_empty() {
+            continue;
+        }
+        let full = cap.get(0).expect("full match exists");
+        if overlaps_consumed(full.start(), &consumed_spans) {
+            continue;
+        }
+        consumed_spans.push((full.start(), full.end()));
+        let line = (content[..full.start()].matches('\n').count() as u32) + 1;
+        let fqn = namespace.as_ref().map(|ns| format!("{ns}.{name}"));
+        symbols.push(ReferenceSymbolEntry {
+            path: rel_path.to_string(),
+            name,
+            kind: "property".to_string(),
+            line,
+            namespace: namespace.clone(),
+            container: None,
+            fqn,
+        });
+    }
+    for cap in method_re.captures_iter(content) {
+        let name = cap
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
+        if name.is_empty() {
+            continue;
+        }
+        let full = cap.get(0).expect("full match exists");
+        if overlaps_consumed(full.start(), &consumed_spans) {
+            continue;
+        }
+        let line = (content[..full.start()].matches('\n').count() as u32) + 1;
+        let fqn = namespace.as_ref().map(|ns| format!("{ns}.{name}"));
+        symbols.push(ReferenceSymbolEntry {
+            path: rel_path.to_string(),
+            name,
+            kind: "method".to_string(),
+            line,
+            namespace: namespace.clone(),
+            container: None,
+            fqn,
+        });
+    }
     symbols
+}
+
+fn overlaps_consumed(pos: usize, spans: &[(usize, usize)]) -> bool {
+    spans.iter().any(|(start, end)| pos >= *start && pos < *end)
 }
 
 pub fn file_signature(metadata: &fs::Metadata) -> String {
@@ -283,6 +352,49 @@ mod tests {
         assert!(symbols
             .iter()
             .any(|s| s.name == "Vec3" && s.kind == "struct"));
+    }
+
+    #[test]
+    fn extract_symbols_from_text_finds_methods() {
+        let text = "namespace UnityEngine {\n    public class Animator {\n        public void Play(string stateName) {}\n        public static int GetLayerCount() { return 0; }\n    }\n}\n";
+        let symbols = extract_symbols_from_text(text, "Runtime/Animator.cs");
+        let play = symbols
+            .iter()
+            .find(|s| s.name == "Play")
+            .expect("Play should be extracted");
+        assert_eq!(play.kind, "method");
+        assert_eq!(play.namespace.as_deref(), Some("UnityEngine"));
+        assert!(symbols
+            .iter()
+            .any(|s| s.name == "GetLayerCount" && s.kind == "method"));
+        assert!(symbols
+            .iter()
+            .any(|s| s.name == "Animator" && s.kind == "class"));
+    }
+
+    #[test]
+    fn extract_symbols_from_text_finds_property() {
+        let text =
+            "public class Foo {\n    public int Count { get; set; }\n    public string Name { get { return _name; } }\n}\n";
+        let symbols = extract_symbols_from_text(text, "Runtime/Foo.cs");
+        assert!(symbols
+            .iter()
+            .any(|s| s.name == "Count" && s.kind == "property"));
+        assert!(symbols
+            .iter()
+            .any(|s| s.name == "Name" && s.kind == "property"));
+        assert!(!symbols
+            .iter()
+            .any(|s| s.name == "Count" && s.kind == "method"));
+    }
+
+    #[test]
+    fn extract_symbols_from_text_does_not_double_capture_class_name() {
+        let text = "public class Bar {}\n";
+        let symbols = extract_symbols_from_text(text, "Runtime/Bar.cs");
+        let bar_entries: Vec<_> = symbols.iter().filter(|s| s.name == "Bar").collect();
+        assert_eq!(bar_entries.len(), 1);
+        assert_eq!(bar_entries[0].kind, "class");
     }
 
     #[test]
