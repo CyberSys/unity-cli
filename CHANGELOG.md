@@ -1,8 +1,15 @@
+## [0.11.2] - 2026-05-12
+
+### 🐛 Bug Fixes
+
+- *(reference)* fastembed の依存を `default-features = false` + `hf-hub-rustls-tls` + `ort-download-binaries` に切り替え、`openssl-sys` 依存を完全に除去。aarch64-unknown-linux-gnu の cross-build で発生していた `openssl` not found 問題を恒久的に解消し、GitHub Release のバイナリ upload を復旧
+- *(release)* v0.11.1 で試した workflow 側の ARM64 OpenSSL インストールは Ubuntu 24 deb822 sources の制約で不安定だったため revert
+
 ## [0.11.1] - 2026-05-12
 
 ### 🐛 Bug Fixes
 
-- *(release)* aarch64-unknown-linux-gnu cross-build で OpenSSL ARM64 ライブラリと pkg-config 環境変数を設定し、v0.11.0 で skip された GitHub Release バイナリ upload を復旧
+- *(release)* aarch64-unknown-linux-gnu cross-build で OpenSSL ARM64 ライブラリと pkg-config 環境変数を設定し、v0.11.0 で skip された GitHub Release バイナリ upload を復旧 (Ubuntu 24 deb822 形式により部分的に失敗 — v0.11.2 で rustls-tls 移行に再修正)
 
 ## [0.11.0] - 2026-05-12
 
