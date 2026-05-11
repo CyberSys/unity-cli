@@ -13,12 +13,13 @@ The canonical reference → navigate → edit workflow when validating LLM-sugge
 ### 1. Locate the symbol in the official source
 
 ```bash
-unity-cli reference grep "class Animator " --context 0
+unity-cli reference find-symbol --name Animator --kind class
+unity-cli reference find-symbol --name AssetDatabase --kind class --namespace UnityEditor
 unity-cli reference grep "void Play\(" --file-glob "Animator*.cs" --context 2
 unity-cli reference search "AssetDatabase.Refresh" --max-results 10
 ```
 
-`grep` emits `{ path, line, text, context_before, context_after }` so the surrounding context survives a follow-up `view`.
+`find-symbol` reads (and lazily builds) a per-version index of type definitions and returns `{ path, name, kind, line, namespace?, container?, fqn? }`. Use it when the type name is already known; the index is regenerated incrementally based on file size and mtime, so repeated lookups within the same Unity version are O(1) over the index. Fall back to `grep` when the pattern targets methods, properties, or free text — those are intentionally outside the Phase 2 index scope.
 
 ### 2. Read the relevant span
 

@@ -327,6 +327,24 @@ fn build_reference_call(command: &ReferenceCommand) -> (&'static str, Value) {
             }
             "reference_view"
         }
+        ReferenceCommand::FindSymbol {
+            name,
+            kind,
+            namespace,
+            version,
+        } => {
+            params.insert("name".to_string(), Value::String(name.clone()));
+            if let Some(k) = kind {
+                params.insert("kind".to_string(), Value::String(k.clone()));
+            }
+            if let Some(ns) = namespace {
+                params.insert("namespace".to_string(), Value::String(ns.clone()));
+            }
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            return ("reference_find_symbol", Value::Object(params));
+        }
         ReferenceCommand::Clean {
             keep,
             version,
@@ -2140,6 +2158,38 @@ mod tests {
         assert_eq!(params["keep"], 2);
         assert_eq!(params["version"], "legacy");
         assert_eq!(params["dryRun"], true);
+    }
+
+    #[test]
+    fn build_reference_call_find_symbol_with_filters() {
+        let cmd = ReferenceCommand::FindSymbol {
+            name: "Animator".to_string(),
+            kind: Some("class".to_string()),
+            namespace: Some("UnityEngine".to_string()),
+            version: Some("2023.2.20f1".to_string()),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_find_symbol");
+        assert_eq!(params["name"], "Animator");
+        assert_eq!(params["kind"], "class");
+        assert_eq!(params["namespace"], "UnityEngine");
+        assert_eq!(params["version"], "2023.2.20f1");
+    }
+
+    #[test]
+    fn build_reference_call_find_symbol_minimal() {
+        let cmd = ReferenceCommand::FindSymbol {
+            name: "Foo".to_string(),
+            kind: None,
+            namespace: None,
+            version: None,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_find_symbol");
+        assert_eq!(params["name"], "Foo");
+        assert!(params.get("kind").is_none());
+        assert!(params.get("namespace").is_none());
+        assert!(params.get("version").is_none());
     }
 
     #[test]

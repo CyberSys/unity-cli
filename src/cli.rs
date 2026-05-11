@@ -271,6 +271,17 @@ pub enum ReferenceCommand {
         #[arg(long)]
         max_lines: Option<u32>,
     },
+    /// Find a symbol (class/interface/struct/enum) in the cached reference index.
+    FindSymbol {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        kind: Option<String>,
+        #[arg(long)]
+        namespace: Option<String>,
+        #[arg(long)]
+        version: Option<String>,
+    },
     /// Remove old UnityCsReference snapshots, keeping the newest entries.
     Clean {
         #[arg(long, default_value_t = 1)]

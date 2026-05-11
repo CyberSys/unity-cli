@@ -249,7 +249,7 @@ unity-cli tool schema input_keyboard --output json
 unity-cli tool schema package_manager --output json
 ```
 
-## Reference Cache (6 tools)
+## Reference Cache (7 tools)
 
 The `unity-cli reference *` family provides a local read-only mirror of the
 official [UnityCsReference](https://github.com/Unity-Technologies/UnityCsReference)
@@ -267,12 +267,14 @@ fetch via `--accept-license` or `UNITY_CLI_ACCEPT_LICENSE=1`.
 | `reference_grep` | Grep the cached reference source line-by-line with optional file glob and context lines. |
 | `reference_view` | Display a slice of a file in the cached reference source by line range. |
 | `reference_clean` | Remove old UnityCsReference snapshots, keeping the newest entries. |
+| `reference_find_symbol` | Look up type definitions (class / interface / struct / enum) in the cached reference source via a per-version on-disk index. |
 
 Typed CLI equivalents:
 
 ```bash
 unity-cli reference fetch --accept-license
 unity-cli reference status --output json
+unity-cli reference find-symbol --name Animator --kind class
 unity-cli reference grep "class Animator " --context 3
 unity-cli reference view Runtime/Export/Animation/Animator.bindings.cs --start-line 100 --max-lines 60
 unity-cli reference clean --keep 1 --dry-run
