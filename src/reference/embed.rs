@@ -128,7 +128,7 @@ pub fn build_embedding_index<E: Embedder>(
     }
     let dim = vectors.first().map(|v| v.len()).unwrap_or(0);
     let mut items = Vec::with_capacity(metas.len());
-    for ((fqn, kind, path, line), vector) in metas.into_iter().zip(vectors.into_iter()) {
+    for ((fqn, kind, path, line), vector) in metas.into_iter().zip(vectors) {
         items.push(EmbeddedSymbol {
             symbol: fqn,
             kind,
