@@ -282,6 +282,29 @@ pub enum ReferenceCommand {
         #[arg(long)]
         version: Option<String>,
     },
+    /// Diff a symbol or path range between two cached Unity versions.
+    Diff {
+        #[arg(long)]
+        from: String,
+        #[arg(long)]
+        to: String,
+        #[arg(long)]
+        symbol: Option<String>,
+        #[arg(long)]
+        path: Option<String>,
+        #[arg(long)]
+        max_symbols: Option<u64>,
+    },
+    /// Resolve the C# token at a cursor position to candidate reference cache entries.
+    ResolveSymbolAt {
+        path: String,
+        #[arg(long)]
+        line: u32,
+        #[arg(long)]
+        column: u32,
+        #[arg(long)]
+        version: Option<String>,
+    },
     /// Remove old UnityCsReference snapshots, keeping the newest entries.
     Clean {
         #[arg(long, default_value_t = 1)]

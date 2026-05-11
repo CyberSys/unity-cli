@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub mod cache;
+pub mod diff;
 pub mod fetcher;
 pub mod index;
 pub mod search;
@@ -22,6 +23,8 @@ pub fn maybe_execute_reference_tool(tool_name: &str, params: &Value) -> Option<R
         "reference_view" => Some(execute_view(params)),
         "reference_clean" => Some(execute_clean(params)),
         "reference_find_symbol" => Some(execute_find_symbol(params)),
+        "reference_diff" => Some(execute_diff(params)),
+        "reference_resolve_symbol_at" => Some(execute_resolve_symbol_at(params)),
         _ => None,
     }
 }
@@ -225,6 +228,169 @@ fn execute_find_symbol(params: &Value) -> Result<Value> {
         "version": version,
         "hits": hits,
     }))
+}
+
+fn execute_diff(params: &Value) -> Result<Value> {
+    let from = params
+        .get("from")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow!("diff requires `from`"))?;
+    let to = params
+        .get("to")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow!("diff requires `to`"))?;
+    let symbol = params
+        .get("symbol")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty());
+    let path_filter = params
+        .get("path")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty());
+    let max_symbols = params
+        .get("maxSymbols")
+        .and_then(Value::as_u64)
+        .map(|n| n as usize);
+    if symbol.is_none() && path_filter.is_none() {
+        return Err(anyhow!("diff requires either `symbol` or `path`"));
+    }
+    let from_dir = cache::version_dir(from)?;
+    let to_dir = cache::version_dir(to)?;
+    diff::ensure_cache_dir(&from_dir, from)?;
+    diff::ensure_cache_dir(&to_dir, to)?;
+
+    if let Some(fqn) = symbol {
+        let diff_value = diff::compute_symbol_diff(&from_dir, &to_dir, fqn)?;
+        return Ok(json!({
+            "ok": true,
+            "from": from,
+            "to": to,
+            "diffs": diff_value.map(|d| vec![d]).unwrap_or_default(),
+        }));
+    }
+    let path_diff = diff::compute_path_diff(&from_dir, &to_dir, path_filter, max_symbols)?;
+    Ok(json!({
+        "ok": true,
+        "from": from,
+        "to": to,
+        "path": path_filter,
+        "added": path_diff.added,
+        "removed": path_diff.removed,
+        "changed": path_diff.changed,
+        "truncated": path_diff.truncated,
+    }))
+}
+
+fn execute_resolve_symbol_at(params: &Value) -> Result<Value> {
+    let path = params
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("resolve_symbol_at requires `path`"))?;
+    let line = params
+        .get("line")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("resolve_symbol_at requires `line`"))? as u32;
+    let column = params
+        .get("column")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("resolve_symbol_at requires `column`"))? as u32;
+    let version_hint = params
+        .get("version")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty());
+    let project_root = params
+        .get("projectRoot")
+        .and_then(Value::as_str)
+        .map(std::path::Path::new);
+
+    if !path.starts_with("Assets/") && !path.starts_with("Packages/") {
+        return Err(anyhow!(
+            "project path must start with Assets/ or Packages/: {path}"
+        ));
+    }
+
+    let abs_path = match project_root {
+        Some(root) => root.join(path),
+        None => std::path::PathBuf::from(path),
+    };
+    let contents = std::fs::read_to_string(&abs_path)
+        .with_context(|| format!("failed to read project file {}", abs_path.display()))?;
+    let token = extract_token_at_cursor(&contents, line, column);
+    let candidates = match &token {
+        Some(name) => collect_resolve_candidates(name, version_hint)?,
+        None => Vec::new(),
+    };
+    Ok(json!({
+        "ok": true,
+        "cursorPath": path,
+        "cursorLine": line,
+        "cursorColumn": column,
+        "tokenName": token,
+        "candidates": candidates,
+    }))
+}
+
+fn extract_token_at_cursor(content: &str, line: u32, column: u32) -> Option<String> {
+    let lines: Vec<&str> = content.lines().collect();
+    let line_idx = line.saturating_sub(1) as usize;
+    let row = lines.get(line_idx)?;
+    let chars: Vec<char> = row.chars().collect();
+    let col_idx = column.saturating_sub(1) as usize;
+    if col_idx >= chars.len() || !is_ident_char(chars[col_idx]) {
+        return None;
+    }
+    let mut start = col_idx;
+    while start > 0 && is_ident_char(chars[start - 1]) {
+        start -= 1;
+    }
+    let mut end = col_idx + 1;
+    while end < chars.len() && is_ident_char(chars[end]) {
+        end += 1;
+    }
+    Some(chars[start..end].iter().collect())
+}
+
+fn is_ident_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+const DEFAULT_RESOLVE_VIEW_WINDOW: u32 = 30;
+
+fn collect_resolve_candidates(name: &str, version_hint: Option<&str>) -> Result<Vec<Value>> {
+    let versions: Vec<String> = match version_hint {
+        Some(v) => vec![v.to_string()],
+        None => cache::list_versions().unwrap_or_default(),
+    };
+    let mut candidates = Vec::new();
+    for ver in &versions {
+        let dir = cache::version_dir(ver)?;
+        if !dir.exists() {
+            continue;
+        }
+        let symbol_index = index::build_or_update_index(&dir)?;
+        let hits = index::find_symbol(&symbol_index, name, None, None);
+        for hit in hits {
+            let view_excerpt = search::run_view(
+                &dir,
+                &hit.path,
+                Some(hit.line),
+                Some(DEFAULT_RESOLVE_VIEW_WINDOW),
+            )
+            .map(|v| v.lines)
+            .unwrap_or_default();
+            candidates.push(json!({
+                "version": ver,
+                "fqn": hit.fqn.clone().unwrap_or_else(|| hit.name.clone()),
+                "kind": hit.kind,
+                "referencePath": hit.path,
+                "referenceLine": hit.line,
+                "viewExcerpt": view_excerpt,
+            }));
+        }
+    }
+    Ok(candidates)
 }
 
 fn execute_clean(params: &Value) -> Result<Value> {
@@ -796,5 +962,220 @@ mod tests {
         assert_eq!(value["ok"], true);
         assert!(value["hits"].as_array().unwrap().is_empty());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    fn setup_two_version_cache(label: &str) -> (PathBuf, &'static str, &'static str) {
+        let root = unique_temp_path(label);
+        let base = root.join("UnityCsReference");
+        let fixture_v1 =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reference-cache-v2/v1");
+        let fixture_v2 =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reference-cache-v2/v2");
+        copy_dir_recursive(&fixture_v1, &base.join("v1")).unwrap();
+        copy_dir_recursive(&fixture_v2, &base.join("v2")).unwrap();
+        (root, "v1", "v2")
+    }
+
+    #[test]
+    fn execute_diff_requires_from_and_to() {
+        let err1 = maybe_execute_reference_tool("reference_diff", &json!({"to": "v2"}))
+            .unwrap()
+            .unwrap_err();
+        assert!(format!("{err1:#}").contains("from"));
+        let err2 = maybe_execute_reference_tool("reference_diff", &json!({"from": "v1"}))
+            .unwrap()
+            .unwrap_err();
+        assert!(format!("{err2:#}").contains("to"));
+    }
+
+    #[test]
+    fn execute_diff_requires_symbol_or_path() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, from, to) = setup_two_version_cache("diff-need");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let err = maybe_execute_reference_tool("reference_diff", &json!({"from": from, "to": to}))
+            .unwrap()
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("symbol"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_diff_symbol_mode_returns_diffs() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, from, to) = setup_two_version_cache("diff-sym");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_diff",
+            &json!({"from": from, "to": to, "symbol": "UnityEngine.Animator"}),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(value["ok"], true);
+        let diffs = value["diffs"].as_array().unwrap();
+        assert!(!diffs.is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_diff_path_mode_returns_added_removed_changed() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, from, to) = setup_two_version_cache("diff-path");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_diff",
+            &json!({"from": from, "to": to, "path": "Runtime/Export"}),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(value["ok"], true);
+        let added = value["added"].as_array().unwrap();
+        let removed = value["removed"].as_array().unwrap();
+        let changed = value["changed"].as_array().unwrap();
+        assert!(added
+            .iter()
+            .any(|s| s["symbol"].as_str().unwrap_or("").ends_with("Awaitable")));
+        assert!(removed.iter().any(|s| s["symbol"]
+            .as_str()
+            .unwrap_or("")
+            .ends_with("LegacyAnimator")));
+        assert!(!changed.is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_diff_errors_when_cache_missing() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("diff-miss");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let err = maybe_execute_reference_tool(
+            "reference_diff",
+            &json!({"from": "missing-v1", "to": "missing-v2", "symbol": "Foo"}),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("does not exist"));
+    }
+
+    #[test]
+    fn execute_resolve_symbol_at_requires_project_prefix() {
+        let err = maybe_execute_reference_tool(
+            "reference_resolve_symbol_at",
+            &json!({"path": "/tmp/bad.cs", "line": 1, "column": 1}),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("Assets/"));
+    }
+
+    #[test]
+    fn execute_resolve_symbol_at_requires_path_line_column() {
+        let e1 = maybe_execute_reference_tool(
+            "reference_resolve_symbol_at",
+            &json!({"line": 1, "column": 1}),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(format!("{e1:#}").contains("path"));
+        let e2 = maybe_execute_reference_tool(
+            "reference_resolve_symbol_at",
+            &json!({"path": "Assets/X.cs", "column": 1}),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(format!("{e2:#}").contains("line"));
+        let e3 = maybe_execute_reference_tool(
+            "reference_resolve_symbol_at",
+            &json!({"path": "Assets/X.cs", "line": 1}),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(format!("{e3:#}").contains("column"));
+    }
+
+    #[test]
+    fn execute_resolve_symbol_at_finds_token_via_fixture() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, _from, to) = setup_two_version_cache("resolve-token");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        // Create a fake project file
+        let project_root = unique_temp_path("resolve-project");
+        std::fs::create_dir_all(project_root.join("Assets/Scripts")).unwrap();
+        std::fs::write(
+            project_root.join("Assets/Scripts/Player.cs"),
+            "public class Player {\n    void Update() {\n        var a = new Animator();\n    }\n}\n",
+        )
+        .unwrap();
+        let value = maybe_execute_reference_tool(
+            "reference_resolve_symbol_at",
+            &json!({
+                "path": "Assets/Scripts/Player.cs",
+                "line": 3,
+                "column": 21,
+                "projectRoot": project_root.to_str().unwrap(),
+                "version": to,
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(value["tokenName"], "Animator");
+        let candidates = value["candidates"].as_array().unwrap();
+        assert!(
+            !candidates.is_empty(),
+            "Animator should resolve to v2 candidate"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&project_root);
+    }
+
+    #[test]
+    fn execute_resolve_symbol_at_empty_token_for_blank_position() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let project_root = unique_temp_path("resolve-blank");
+        std::fs::create_dir_all(project_root.join("Assets")).unwrap();
+        std::fs::write(project_root.join("Assets/Foo.cs"), "// comment line\n").unwrap();
+        let value = maybe_execute_reference_tool(
+            "reference_resolve_symbol_at",
+            &json!({
+                "path": "Assets/Foo.cs",
+                "line": 1,
+                "column": 1,
+                "projectRoot": project_root.to_str().unwrap(),
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(value["tokenName"].is_null() || value["tokenName"] == "");
+        assert!(value["candidates"].as_array().unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&project_root);
+    }
+
+    #[test]
+    fn extract_token_at_cursor_handles_edge_cases() {
+        let content = "var animator = new Animator();\n";
+        assert_eq!(
+            extract_token_at_cursor(content, 1, 5),
+            Some("animator".to_string())
+        );
+        assert_eq!(
+            extract_token_at_cursor(content, 1, 20),
+            Some("Animator".to_string())
+        );
+        // Whitespace position returns None
+        assert_eq!(extract_token_at_cursor(content, 1, 4), None);
+        // Out-of-range line returns None
+        assert_eq!(extract_token_at_cursor(content, 99, 1), None);
     }
 }

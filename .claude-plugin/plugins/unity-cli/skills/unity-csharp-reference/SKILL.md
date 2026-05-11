@@ -49,10 +49,16 @@ unity-cli reference status --output json
 unity-cli reference find-symbol --name Animator --kind class
 unity-cli reference grep "class Animator " --context 3
 unity-cli reference view Runtime/Export/Animation/Animator.bindings.cs --start-line 100 --max-lines 60
+unity-cli reference diff --from 2022.3.10f1 --to 2023.2.20f1 --symbol UnityEngine.Animator
+unity-cli reference resolve-symbol-at Assets/Scripts/Player.cs --line 42 --column 18
 unity-cli reference clean --keep 1 --dry-run
 ```
 
 Use `reference find-symbol` first when you already know the type name (class / interface / struct / enum). It is backed by an on-disk index per Unity version (`~/.unity/cache/UnityCsReference/<version>/.unity-cli-index/symbols.json`) and is faster than `grep` for repeated lookups. Drop back to `grep` for free-text patterns or member-level matches.
+
+Use `reference diff` to compare two cached Unity versions. The default symbol-only mode (`--symbol <fqn>`) returns a single before/after pair, and the opt-in path mode (`--path <subpath> [--max-symbols N]`) lists added / removed / changed type definitions in a directory.
+
+Use `reference resolve-symbol-at <project-rel-path> --line <n> --column <m>` when the user is on a specific cursor position in a project file (`Assets/...` or `Packages/...`) and wants to see the canonical Unity reference for the type under the cursor. The tool is a thin wrapper: it reads the project file, extracts the identifier at the cursor, and feeds it through `reference find-symbol` + `reference view` for each cached version.
 
 ## Examples
 

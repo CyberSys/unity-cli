@@ -249,7 +249,7 @@ unity-cli tool schema input_keyboard --output json
 unity-cli tool schema package_manager --output json
 ```
 
-## Reference Cache (7 tools)
+## Reference Cache (9 tools)
 
 The `unity-cli reference *` family provides a local read-only mirror of the
 official [UnityCsReference](https://github.com/Unity-Technologies/UnityCsReference)
@@ -268,6 +268,8 @@ fetch via `--accept-license` or `UNITY_CLI_ACCEPT_LICENSE=1`.
 | `reference_view` | Display a slice of a file in the cached reference source by line range. |
 | `reference_clean` | Remove old UnityCsReference snapshots, keeping the newest entries. |
 | `reference_find_symbol` | Look up type definitions (class / interface / struct / enum) in the cached reference source via a per-version on-disk index. |
+| `reference_diff` | Compare a symbol or path range between two cached Unity versions. Returns symbol-level hunks or `{added, removed, changed}`. |
+| `reference_resolve_symbol_at` | Resolve the identifier at a project cursor position (`Assets/...` / `Packages/...`) to candidate reference cache entries with view excerpts. |
 
 Typed CLI equivalents:
 
@@ -277,6 +279,8 @@ unity-cli reference status --output json
 unity-cli reference find-symbol --name Animator --kind class
 unity-cli reference grep "class Animator " --context 3
 unity-cli reference view Runtime/Export/Animation/Animator.bindings.cs --start-line 100 --max-lines 60
+unity-cli reference diff --from 2022.3.10f1 --to 2023.2.20f1 --symbol UnityEngine.Animator
+unity-cli reference resolve-symbol-at Assets/Scripts/Player.cs --line 42 --column 18
 unity-cli reference clean --keep 1 --dry-run
 ```
 

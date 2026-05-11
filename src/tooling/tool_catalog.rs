@@ -127,6 +127,8 @@ pub const TOOL_NAMES: &[&str] = &[
     "reference_view",
     "reference_clean",
     "reference_find_symbol",
+    "reference_diff",
+    "reference_resolve_symbol_at",
 ];
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -230,7 +232,9 @@ fn tool_executor(name: &str) -> ToolExecutor {
         | "reference_grep"
         | "reference_view"
         | "reference_clean"
-        | "reference_find_symbol" => ToolExecutor::Local,
+        | "reference_find_symbol"
+        | "reference_diff"
+        | "reference_resolve_symbol_at" => ToolExecutor::Local,
         _ => ToolExecutor::Remote,
     }
 }
@@ -283,6 +287,8 @@ fn is_read_only_tool(name: &str) -> bool {
             | "reference_grep"
             | "reference_view"
             | "reference_find_symbol"
+            | "reference_diff"
+            | "reference_resolve_symbol_at"
     )
 }
 
@@ -2306,6 +2312,28 @@ fn tool_params_schema(name: &str) -> Value {
             &["name"],
             false,
         ),
+        "reference_diff" => object_schema(
+            &[
+                ("from", string_schema()),
+                ("to", string_schema()),
+                ("symbol", string_schema()),
+                ("path", string_schema()),
+                ("maxSymbols", integer_schema()),
+            ],
+            &["from", "to"],
+            false,
+        ),
+        "reference_resolve_symbol_at" => object_schema(
+            &[
+                ("path", string_schema()),
+                ("line", integer_schema()),
+                ("column", integer_schema()),
+                ("version", string_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &["path", "line", "column"],
+            false,
+        ),
         _ => default_params_schema(),
     }
 }
@@ -2420,7 +2448,7 @@ mod tests {
 
     #[test]
     fn tool_catalog_keeps_manifest_parity_count() {
-        assert_eq!(TOOL_NAMES.len(), 125);
+        assert_eq!(TOOL_NAMES.len(), 127);
     }
 
     #[test]

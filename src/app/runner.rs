@@ -345,6 +345,43 @@ fn build_reference_call(command: &ReferenceCommand) -> (&'static str, Value) {
             }
             return ("reference_find_symbol", Value::Object(params));
         }
+        ReferenceCommand::Diff {
+            from,
+            to,
+            symbol,
+            path,
+            max_symbols,
+        } => {
+            params.insert("from".to_string(), Value::String(from.clone()));
+            params.insert("to".to_string(), Value::String(to.clone()));
+            if let Some(s) = symbol {
+                params.insert("symbol".to_string(), Value::String(s.clone()));
+            }
+            if let Some(p) = path {
+                params.insert("path".to_string(), Value::String(p.clone()));
+            }
+            if let Some(n) = max_symbols {
+                params.insert("maxSymbols".to_string(), Value::Number((*n).into()));
+            }
+            return ("reference_diff", Value::Object(params));
+        }
+        ReferenceCommand::ResolveSymbolAt {
+            path,
+            line,
+            column,
+            version,
+        } => {
+            params.insert("path".to_string(), Value::String(path.clone()));
+            params.insert("line".to_string(), Value::Number((u64::from(*line)).into()));
+            params.insert(
+                "column".to_string(),
+                Value::Number((u64::from(*column)).into()),
+            );
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            return ("reference_resolve_symbol_at", Value::Object(params));
+        }
         ReferenceCommand::Clean {
             keep,
             version,
@@ -2158,6 +2195,69 @@ mod tests {
         assert_eq!(params["keep"], 2);
         assert_eq!(params["version"], "legacy");
         assert_eq!(params["dryRun"], true);
+    }
+
+    #[test]
+    fn build_reference_call_diff_symbol_mode() {
+        let cmd = ReferenceCommand::Diff {
+            from: "2022.3.10f1".to_string(),
+            to: "2023.2.20f1".to_string(),
+            symbol: Some("UnityEngine.Animator".to_string()),
+            path: None,
+            max_symbols: None,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_diff");
+        assert_eq!(params["from"], "2022.3.10f1");
+        assert_eq!(params["to"], "2023.2.20f1");
+        assert_eq!(params["symbol"], "UnityEngine.Animator");
+        assert!(params.get("path").is_none());
+        assert!(params.get("maxSymbols").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_diff_path_mode_with_limit() {
+        let cmd = ReferenceCommand::Diff {
+            from: "v1".to_string(),
+            to: "v2".to_string(),
+            symbol: None,
+            path: Some("Runtime/Export".to_string()),
+            max_symbols: Some(20),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_diff");
+        assert_eq!(params["path"], "Runtime/Export");
+        assert_eq!(params["maxSymbols"], 20);
+        assert!(params.get("symbol").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_resolve_symbol_at_with_version() {
+        let cmd = ReferenceCommand::ResolveSymbolAt {
+            path: "Assets/Scripts/Player.cs".to_string(),
+            line: 42,
+            column: 18,
+            version: Some("2023.2.20f1".to_string()),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_resolve_symbol_at");
+        assert_eq!(params["path"], "Assets/Scripts/Player.cs");
+        assert_eq!(params["line"], 42);
+        assert_eq!(params["column"], 18);
+        assert_eq!(params["version"], "2023.2.20f1");
+    }
+
+    #[test]
+    fn build_reference_call_resolve_symbol_at_minimal() {
+        let cmd = ReferenceCommand::ResolveSymbolAt {
+            path: "Packages/com.acme/Foo.cs".to_string(),
+            line: 1,
+            column: 1,
+            version: None,
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_resolve_symbol_at");
+        assert!(params.get("version").is_none());
     }
 
     #[test]
