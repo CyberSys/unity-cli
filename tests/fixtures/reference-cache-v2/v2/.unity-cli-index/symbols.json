@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "generated_at_epoch_ms": 1778510932257,
+  "files": {
+    "Editor/AnimatorInspector.cs": {
+      "signature": "130:1778510639309",
+      "symbols": [
+        {
+          "path": "Editor/AnimatorInspector.cs",
+          "name": "AnimatorInspector",
+          "kind": "class",
+          "line": 3,
+          "namespace": "UnityEditor",
+          "fqn": "UnityEditor.AnimatorInspector"
+        }
+      ]
+    },
+    "Runtime/Export/Animation/Animator.bindings.cs": {
+      "signature": "214:1778510639108",
+      "symbols": [
+        {
+          "path": "Runtime/Export/Animation/Animator.bindings.cs",
+          "name": "Animator",
+          "kind": "class",
+          "line": 3,
+          "namespace": "UnityEngine",
+          "fqn": "UnityEngine.Animator"
+        }
+      ]
+    },
+    "Runtime/Export/New/Awaitable.cs": {
+      "signature": "145:1778510639498",
+      "symbols": [
+        {
+          "path": "Runtime/Export/New/Awaitable.cs",
+          "name": "Awaitable",
+          "kind": "class",
+          "line": 3,
+          "namespace": "UnityEngine",
+          "fqn": "UnityEngine.Awaitable"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "generated_at_epoch_ms": 1778510932256,
+  "files": {
+    "Editor/AnimatorInspector.cs": {
+      "signature": "130:1778510638701",
+      "symbols": [
+        {
+          "path": "Editor/AnimatorInspector.cs",
+          "name": "AnimatorInspector",
+          "kind": "class",
+          "line": 3,
+          "namespace": "UnityEditor",
+          "fqn": "UnityEditor.AnimatorInspector"
+        }
+      ]
+    },
+    "Runtime/Export/Animation/Animator.bindings.cs": {
+      "signature": "139:1778510638483",
+      "symbols": [
+        {
+          "path": "Runtime/Export/Animation/Animator.bindings.cs",
+          "name": "Animator",
+          "kind": "class",
+          "line": 3,
+          "namespace": "UnityEngine",
+          "fqn": "UnityEngine.Animator"
+        }
+      ]
+    },
+    "Runtime/Export/Animation/Removed.cs": {
+      "signature": "70:1778510638916",
+      "symbols": [
+        {
+          "path": "Runtime/Export/Animation/Removed.cs",
+          "name": "LegacyAnimator",
+          "kind": "class",
+          "line": 3,
+          "namespace": "UnityEngine",
+          "fqn": "UnityEngine.LegacyAnimator"
+        }
+      ]
+    }
+  }
+}
