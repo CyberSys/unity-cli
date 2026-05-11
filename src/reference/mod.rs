@@ -2,6 +2,7 @@
 
 pub mod cache;
 pub mod fetcher;
+pub mod index;
 pub mod search;
 pub mod version;
 
@@ -20,6 +21,7 @@ pub fn maybe_execute_reference_tool(tool_name: &str, params: &Value) -> Option<R
         "reference_grep" => Some(execute_grep(params)),
         "reference_view" => Some(execute_view(params)),
         "reference_clean" => Some(execute_clean(params)),
+        "reference_find_symbol" => Some(execute_find_symbol(params)),
         _ => None,
     }
 }
@@ -195,6 +197,33 @@ fn execute_view(params: &Value) -> Result<Value> {
         "ok": true,
         "version": version,
         "view": out,
+    }))
+}
+
+fn execute_find_symbol(params: &Value) -> Result<Value> {
+    let name = params
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("find_symbol requires `name`"))?;
+    let kind = params.get("kind").and_then(Value::as_str);
+    if let Some(k) = kind {
+        index::validate_kind(k)?;
+    }
+    let namespace = params.get("namespace").and_then(Value::as_str);
+    let version = resolve_version(params)?;
+    let dir = cache::version_dir(&version)?;
+    if !dir.exists() {
+        return Err(anyhow!(
+            "reference cache for version '{}' does not exist; run `unity-cli reference fetch` first",
+            version
+        ));
+    }
+    let symbol_index = index::build_or_update_index(&dir)?;
+    let hits = index::find_symbol(&symbol_index, name, kind, namespace);
+    Ok(json!({
+        "ok": true,
+        "version": version,
+        "hits": hits,
     }))
 }
 
@@ -668,6 +697,104 @@ mod tests {
             !dest.exists(),
             "force should have removed dest before clone"
         );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_find_symbol_requires_name() {
+        let err = maybe_execute_reference_tool("reference_find_symbol", &json!({}))
+            .unwrap()
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("name"));
+    }
+
+    #[test]
+    fn execute_find_symbol_rejects_unknown_kind() {
+        let err = maybe_execute_reference_tool(
+            "reference_find_symbol",
+            &json!({"name": "Foo", "kind": "alien"}),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("not allowed"));
+    }
+
+    #[test]
+    fn execute_find_symbol_returns_error_when_cache_missing() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("find-missing");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let err = maybe_execute_reference_tool(
+            "reference_find_symbol",
+            &json!({"name": "Foo", "version": "missing"}),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("does not exist"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_find_symbol_returns_hits_from_fixture() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("find-hits");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_find_symbol",
+            &json!({"name": "Animator", "kind": "class", "version": version}),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(value["ok"], true);
+        let hits = value["hits"].as_array().unwrap();
+        assert!(!hits.is_empty(), "Animator class should be discovered");
+        assert!(hits.iter().all(|h| h["kind"] == "class"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_find_symbol_filters_namespace() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("find-ns");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_find_symbol",
+            &json!({
+                "name": "AnimatorInspector",
+                "kind": "class",
+                "namespace": "UnityEditor",
+                "version": version,
+            }),
+        )
+        .unwrap()
+        .unwrap();
+        let hits = value["hits"].as_array().unwrap();
+        assert!(!hits.is_empty());
+        assert_eq!(hits[0]["namespace"], "UnityEditor");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_find_symbol_empty_hits_for_unknown_name() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let (root, version) = setup_cache_with_fixture("find-unknown");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let value = maybe_execute_reference_tool(
+            "reference_find_symbol",
+            &json!({"name": "Nonexistent", "version": version}),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(value["ok"], true);
+        assert!(value["hits"].as_array().unwrap().is_empty());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

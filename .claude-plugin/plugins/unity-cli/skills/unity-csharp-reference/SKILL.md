@@ -46,10 +46,13 @@ Browse Unity Technologies' official UnityCsReference C# source as a read-only lo
 ```bash
 unity-cli reference fetch --accept-license
 unity-cli reference status --output json
+unity-cli reference find-symbol --name Animator --kind class
 unity-cli reference grep "class Animator " --context 3
 unity-cli reference view Runtime/Export/Animation/Animator.bindings.cs --start-line 100 --max-lines 60
 unity-cli reference clean --keep 1 --dry-run
 ```
+
+Use `reference find-symbol` first when you already know the type name (class / interface / struct / enum). It is backed by an on-disk index per Unity version (`~/.unity/cache/UnityCsReference/<version>/.unity-cli-index/symbols.json`) and is faster than `grep` for repeated lookups. Drop back to `grep` for free-text patterns or member-level matches.
 
 ## Examples
 
