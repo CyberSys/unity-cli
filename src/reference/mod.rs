@@ -341,6 +341,9 @@ fn extract_token_at_cursor(content: &str, line: u32, column: u32) -> Option<Stri
     if col_idx >= chars.len() || !is_ident_char(chars[col_idx]) {
         return None;
     }
+    if is_cursor_in_comment_or_string(&chars, col_idx) {
+        return None;
+    }
     let mut start = col_idx;
     while start > 0 && is_ident_char(chars[start - 1]) {
         start -= 1;
@@ -350,6 +353,29 @@ fn extract_token_at_cursor(content: &str, line: u32, column: u32) -> Option<Stri
         end += 1;
     }
     Some(chars[start..end].iter().collect())
+}
+
+fn is_cursor_in_comment_or_string(chars: &[char], col_idx: usize) -> bool {
+    let mut in_string = false;
+    let mut i = 0;
+    while i < col_idx {
+        let c = chars[i];
+        if in_string {
+            if c == '\\' && i + 1 < chars.len() {
+                i += 2;
+                continue;
+            }
+            if c == '"' {
+                in_string = false;
+            }
+        } else if c == '"' {
+            in_string = true;
+        } else if c == '/' && i + 1 < chars.len() && chars[i + 1] == '/' {
+            return true;
+        }
+        i += 1;
+    }
+    in_string
 }
 
 fn is_ident_char(c: char) -> bool {
@@ -1177,5 +1203,39 @@ mod tests {
         assert_eq!(extract_token_at_cursor(content, 1, 4), None);
         // Out-of-range line returns None
         assert_eq!(extract_token_at_cursor(content, 99, 1), None);
+    }
+
+    #[test]
+    fn extract_token_at_cursor_skips_line_comment() {
+        let content = "var x = 1; // Animator was here\n";
+        // 'A' of Animator inside comment is at column 15
+        assert_eq!(extract_token_at_cursor(content, 1, 15), None);
+    }
+
+    #[test]
+    fn extract_token_at_cursor_skips_string_literal() {
+        let content = "var s = \"Animator\"; var y = 1;\n";
+        // 'A' of Animator inside string is at column 10
+        assert_eq!(extract_token_at_cursor(content, 1, 10), None);
+    }
+
+    #[test]
+    fn extract_token_at_cursor_returns_ident_after_closed_string() {
+        let content = "var s = \"abc\"; Animator a;\n";
+        // 'A' of Animator after closed string is at column 16
+        assert_eq!(
+            extract_token_at_cursor(content, 1, 16),
+            Some("Animator".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_token_at_cursor_handles_escaped_quote_in_string() {
+        let content = "var s = \"a\\\"b\"; Animator a;\n";
+        // After the escaped string closes at \"; the cursor sits on the A of Animator (column 17)
+        assert_eq!(
+            extract_token_at_cursor(content, 1, 17),
+            Some("Animator".to_string())
+        );
     }
 }
