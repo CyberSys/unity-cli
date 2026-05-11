@@ -51,3 +51,10 @@
 - Mistake: ralph loop / autonomous 進行時に、umbrella SPEC があってもサブタスクごとに新 SPEC を生やす癖が出た。Phase 1-3 の「Phase ごとに 1 SPEC」パターンを引きずって過剰に細分化した。
 - Rule: umbrella SPEC が存在する Phase では、サブタスクで独立した SPEC を新設しない。実装は umbrella SPEC を `Refs` する commit / PR で進め、umbrella SPEC 本文の Tasks セクションをチェックボックスで更新する。新 SPEC を起こすのは umbrella の意図と明確に外れる別軸の作業に限定する。
 - Checkpoint: 1. 新規 SPEC 起票前に「既存の umbrella SPEC で受け止められないか」を 1 度自問する 2. 起票する場合は umbrella との関係（吸収 / 並列 / 独立）を本文の `Related` で明示する
+
+### 2026-05-12 (正式な gwt-spec を close しない)
+
+- Context: Phase 4 umbrella SPEC #191 の 5 サブタスク (A-E) がすべて develop に MERGED になった時点で「completed として close」してしまい、誤起票 #192 も同時に close した。user から「そもそも、正式な gwt-spec はクローズしません」と訂正を受けた。Phase 1-3 (#185 / #187 / #188) は実装 MERGED 後も OPEN 維持しているのが既存運用パターン (確認済み)。
+- Mistake: GitHub Issue の標準的な「実装が終わったら close」感覚で gwt-spec を扱った。gwt-spec が "living documentation" として運用されている前提を見落とし、Tasks セクションに「整理タスク: umbrella を close するかどうか user 判断」と書いた時点で誤誘導が始まっていた。
+- Rule: gwt-spec ラベル付き Issue は実装完了後も close せず OPEN 維持する。Phase 完了 / PR 全 MERGED / Tasks 全 `[x]` であっても `gh issue close` / `gwtd issue close` を呼ばない。Out of Scope の継続改善余地や後続 Phase の起点として残す。Tasks セクションに「整理タスク: umbrella を close する判断」のような close 誘導項目を作らない。重複 / 誤起票で close 候補となる場合でも、自律的に close せず必ず user 判断を仰ぐ。
+- Checkpoint: 1. SPEC 完走報告は最終 comment + Workspace 更新 + Tasks `[x]` で足りる 2. close 操作の代わりに「OPEN 維持運用方針」を Tasks / 運用方針セクションに明示する 3. 既存 SPEC の状態確認時に `[CLOSED]` を見かけたら「意図的な close か」を user に確認、意図せず close されていたら reopen 相談
