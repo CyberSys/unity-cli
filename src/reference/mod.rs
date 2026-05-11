@@ -2,6 +2,7 @@
 
 pub mod cache;
 pub mod diff;
+pub mod embed;
 pub mod fetcher;
 pub mod index;
 pub mod search;
@@ -14,6 +15,8 @@ use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 use walkdir::WalkDir;
 
+use crate::reference::embed::Embedder;
+
 pub fn maybe_execute_reference_tool(tool_name: &str, params: &Value) -> Option<Result<Value>> {
     match tool_name {
         "reference_fetch" => Some(execute_fetch(params)),
@@ -25,6 +28,8 @@ pub fn maybe_execute_reference_tool(tool_name: &str, params: &Value) -> Option<R
         "reference_find_symbol" => Some(execute_find_symbol(params)),
         "reference_diff" => Some(execute_diff(params)),
         "reference_resolve_symbol_at" => Some(execute_resolve_symbol_at(params)),
+        "reference_embed_build" => Some(execute_embed_build(params)),
+        "reference_embed_search" => Some(execute_embed_search(params)),
         _ => None,
     }
 }
@@ -417,6 +422,80 @@ fn collect_resolve_candidates(name: &str, version_hint: Option<&str>) -> Result<
         }
     }
     Ok(candidates)
+}
+
+fn execute_embed_build(params: &Value) -> Result<Value> {
+    let version = resolve_version(params)?;
+    let dir = cache::version_dir(&version)?;
+    if !dir.exists() {
+        return Err(anyhow!(
+            "reference cache for version '{}' does not exist; run `unity-cli reference fetch --version {}` first",
+            version,
+            version
+        ));
+    }
+    let symbol_index = index::build_or_update_index(&dir)?;
+    let embedder = embed::FastEmbedder::new()?;
+    let embedding_index = embed::build_embedding_index(&dir, &embedder, &symbol_index)?;
+    let path = dir.join(embed::EMBEDDING_INDEX_REL_PATH);
+    embed::save_embedding_index(&path, &embedding_index)?;
+    Ok(json!({
+        "ok": true,
+        "version": version,
+        "modelId": embedding_index.model_id,
+        "dim": embedding_index.dim,
+        "count": embedding_index.items.len(),
+        "path": path.display().to_string(),
+    }))
+}
+
+fn execute_embed_search(params: &Value) -> Result<Value> {
+    let query = params
+        .get("query")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow!("embed_search requires `query`"))?;
+    let top_k = params
+        .get("topK")
+        .and_then(Value::as_u64)
+        .map(|n| n as usize)
+        .unwrap_or(embed::DEFAULT_TOP_K);
+    let version = resolve_version(params)?;
+    let dir = cache::version_dir(&version)?;
+    let index_path = dir.join(embed::EMBEDDING_INDEX_REL_PATH);
+    if !index_path.exists() {
+        return Err(anyhow!(
+            "embedding index missing for version '{}'; run `unity-cli reference embed-build --version {}` first",
+            version,
+            version
+        ));
+    }
+    let index = embed::load_embedding_index(&index_path)?;
+    let embedder = embed::FastEmbedder::new()?;
+    let mut vectors = embedder.embed(&[query.to_string()])?;
+    let query_vec = vectors
+        .pop()
+        .ok_or_else(|| anyhow!("embedder returned no vector for query"))?;
+    let hits = embed::search(&index, &query_vec, top_k);
+    let hits_json: Vec<Value> = hits
+        .into_iter()
+        .map(|(sym, score)| {
+            json!({
+                "symbol": sym.symbol,
+                "kind": sym.kind,
+                "path": sym.path,
+                "line": sym.line,
+                "score": score,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "ok": true,
+        "version": version,
+        "query": query,
+        "modelId": index.model_id,
+        "hits": hits_json,
+    }))
 }
 
 fn execute_clean(params: &Value) -> Result<Value> {
@@ -1237,5 +1316,46 @@ mod tests {
             extract_token_at_cursor(content, 1, 17),
             Some("Animator".to_string())
         );
+    }
+
+    #[test]
+    fn execute_embed_search_requires_query() {
+        let err = maybe_execute_reference_tool("reference_embed_search", &json!({}))
+            .unwrap()
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("query"));
+    }
+
+    #[test]
+    fn execute_embed_search_errors_when_index_missing() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("embed-search-missing");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let base = root.join("UnityCsReference");
+        std::fs::create_dir_all(base.join("v1")).unwrap();
+        let err = maybe_execute_reference_tool(
+            "reference_embed_search",
+            &json!({"query": "animator", "version": "v1"}),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("embedding index missing"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn execute_embed_build_errors_when_cache_missing() {
+        let _guard = crate::test_env::env_lock()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let root = unique_temp_path("embed-build-missing");
+        let _env = EnvVarGuard::set("UNITY_CLI_CACHE_ROOT", root.to_str().unwrap());
+        let err =
+            maybe_execute_reference_tool("reference_embed_build", &json!({"version": "not-there"}))
+                .unwrap()
+                .unwrap_err();
+        assert!(format!("{err:#}").contains("does not exist"));
     }
 }

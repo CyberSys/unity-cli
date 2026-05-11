@@ -305,6 +305,20 @@ pub enum ReferenceCommand {
         #[arg(long)]
         version: Option<String>,
     },
+    /// Build the embedding index for a cached Unity version (uses fastembed).
+    EmbedBuild {
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Semantic search over the embedding index for a cached Unity version.
+    EmbedSearch {
+        #[arg(long)]
+        query: String,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        top_k: Option<u64>,
+    },
     /// Remove old UnityCsReference snapshots, keeping the newest entries.
     Clean {
         #[arg(long, default_value_t = 1)]

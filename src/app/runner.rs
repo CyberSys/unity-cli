@@ -382,6 +382,26 @@ fn build_reference_call(command: &ReferenceCommand) -> (&'static str, Value) {
             }
             return ("reference_resolve_symbol_at", Value::Object(params));
         }
+        ReferenceCommand::EmbedBuild { version } => {
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            return ("reference_embed_build", Value::Object(params));
+        }
+        ReferenceCommand::EmbedSearch {
+            query,
+            version,
+            top_k,
+        } => {
+            params.insert("query".to_string(), Value::String(query.clone()));
+            if let Some(v) = version {
+                params.insert("version".to_string(), Value::String(v.clone()));
+            }
+            if let Some(k) = top_k {
+                params.insert("topK".to_string(), Value::Number((*k).into()));
+            }
+            return ("reference_embed_search", Value::Object(params));
+        }
         ReferenceCommand::Clean {
             keep,
             version,
@@ -2258,6 +2278,50 @@ mod tests {
         let (tool, params) = build_reference_call(&cmd);
         assert_eq!(tool, "reference_resolve_symbol_at");
         assert!(params.get("version").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_embed_build_includes_version() {
+        let cmd = ReferenceCommand::EmbedBuild {
+            version: Some("2023.2.20f1".to_string()),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_embed_build");
+        assert_eq!(params["version"], "2023.2.20f1");
+    }
+
+    #[test]
+    fn build_reference_call_embed_build_omits_optional_version() {
+        let cmd = ReferenceCommand::EmbedBuild { version: None };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_embed_build");
+        assert!(params.get("version").is_none());
+    }
+
+    #[test]
+    fn build_reference_call_embed_search_with_top_k() {
+        let cmd = ReferenceCommand::EmbedSearch {
+            query: "animator state callback".to_string(),
+            version: Some("2023.2.20f1".to_string()),
+            top_k: Some(5),
+        };
+        let (tool, params) = build_reference_call(&cmd);
+        assert_eq!(tool, "reference_embed_search");
+        assert_eq!(params["query"], "animator state callback");
+        assert_eq!(params["version"], "2023.2.20f1");
+        assert_eq!(params["topK"], 5);
+    }
+
+    #[test]
+    fn build_reference_call_embed_search_omits_optional_top_k() {
+        let cmd = ReferenceCommand::EmbedSearch {
+            query: "foo".to_string(),
+            version: None,
+            top_k: None,
+        };
+        let (_tool, params) = build_reference_call(&cmd);
+        assert_eq!(params["query"], "foo");
+        assert!(params.get("topK").is_none());
     }
 
     #[test]

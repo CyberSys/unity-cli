@@ -129,6 +129,8 @@ pub const TOOL_NAMES: &[&str] = &[
     "reference_find_symbol",
     "reference_diff",
     "reference_resolve_symbol_at",
+    "reference_embed_build",
+    "reference_embed_search",
 ];
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -234,7 +236,9 @@ fn tool_executor(name: &str) -> ToolExecutor {
         | "reference_clean"
         | "reference_find_symbol"
         | "reference_diff"
-        | "reference_resolve_symbol_at" => ToolExecutor::Local,
+        | "reference_resolve_symbol_at"
+        | "reference_embed_build"
+        | "reference_embed_search" => ToolExecutor::Local,
         _ => ToolExecutor::Remote,
     }
 }
@@ -289,6 +293,7 @@ fn is_read_only_tool(name: &str) -> bool {
             | "reference_find_symbol"
             | "reference_diff"
             | "reference_resolve_symbol_at"
+            | "reference_embed_search"
     )
 }
 
@@ -2334,6 +2339,24 @@ fn tool_params_schema(name: &str) -> Value {
             &["path", "line", "column"],
             false,
         ),
+        "reference_embed_build" => object_schema(
+            &[
+                ("version", string_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &[],
+            false,
+        ),
+        "reference_embed_search" => object_schema(
+            &[
+                ("query", string_schema()),
+                ("version", string_schema()),
+                ("topK", integer_schema()),
+                ("projectRoot", string_schema()),
+            ],
+            &["query"],
+            false,
+        ),
         _ => default_params_schema(),
     }
 }
@@ -2448,7 +2471,7 @@ mod tests {
 
     #[test]
     fn tool_catalog_keeps_manifest_parity_count() {
-        assert_eq!(TOOL_NAMES.len(), 127);
+        assert_eq!(TOOL_NAMES.len(), 129);
     }
 
     #[test]
