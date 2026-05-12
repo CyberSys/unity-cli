@@ -1,3 +1,9 @@
+## [0.11.3] - 2026-05-12
+
+### 🐛 Bug Fixes
+
+- *(release)* aarch64-unknown-linux-gnu ジョブを GitHub Actions の native ARM64 runner (`ubuntu-24.04-arm`) に切替。cross-compile 関連ステップ (gcc-aarch64-linux-gnu の apt インストール、`CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER` env) を削除し、`ort` (ONNX Runtime) が要求していた `libstdc++:arm64` の cross-link 問題を解消
+
 ## [0.11.2] - 2026-05-12
 
 ### 🐛 Bug Fixes
